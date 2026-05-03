@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>联系我们 - 眼动仪编程初学者代码阅读专注力训练系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .contact-section {
+            padding: 50px 0;
+            background-color: white;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .info-card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .info-card h3 {
+            color: #343a40;
+            margin-bottom: 15px;
+        }
+        .info-card p {
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" th:href="@{/}">眼动仪训练系统</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" th:href="@{/}">首页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" th:href="@{/about}">关于系统</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" th:href="@{/contact}">联系我们</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" th:href="@{/user/login}">登录</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" th:href="@{/user/register}">注册</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 联系我们 -->
+    <div class="container">
+        <div class="contact-section">
+            <h1 class="text-center mb-5">联系我们</h1>
+            
+            <div class="row mb-5">
+                <div class="col-md-6">
+                    <div class="info-card">
+                        <h3>联系方式</h3>
+                        <p><strong>邮箱：</strong>support@eyetracking-system.com</p>
+                        <p><strong>电话：</strong>400-123-4567</p>
+                        <p><strong>地址：</strong>北京市海淀区清华大学计算机科学与技术系</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="info-card">
+                        <h3>技术支持</h3>
+                        <p>如果您在使用系统过程中遇到任何问题，请随时联系我们的技术支持团队。我们将在24小时内回复您的问题。</p>
+                        <p>您也可以在系统中提交反馈，我们会及时处理。</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="info-card">
+                        <h3>常见问题</h3>
+                        <div class="accordion" id="faqAccordion">
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingOne">
+                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                                        如何使用眼动仪进行训练？
+                                    </button>
+                                </h2>
+                                <div id="collapseOne" class="accordion-collapse collapse show" aria-labelledby="headingOne" data-bs-parent="#faqAccordion">
+                                    <div class="accordion-body">
+                                        首先，您需要注册并登录系统。然后，连接眼动仪设备，在训练页面选择合适的代码示例开始训练。系统会自动采集您的眼动数据并进行分析。
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingTwo">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+                                        系统支持哪些编程语言？
+                                    </button>
+                                </h2>
+                                <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#faqAccordion">
+                                    <div class="accordion-body">
+                                        目前系统支持Java、Python和JavaScript三种编程语言的代码示例。我们会不断添加更多编程语言的支持。
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingThree">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
+                                        如何查看训练报告？
+                                    </button>
+                                </h2>
+                                <div id="collapseThree" class="accordion-collapse collapse" aria-labelledby="headingThree" data-bs-parent="#faqAccordion">
+                                    <div class="accordion-body">
+                                        训练结束后，系统会自动生成训练报告。您可以在仪表盘页面查看历史训练记录和详细的分析报告。
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white text-center py-3 mt-5">
+        <div class="container">
+            <p>&copy; 2026 眼动仪编程初学者代码阅读专注力训练系统</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

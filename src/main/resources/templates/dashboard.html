@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仪表盘 - 眼动仪训练系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .sidebar {
+            background-color: #343a40;
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .sidebar a {
+            color: white;
+            text-decoration: none;
+            display: block;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+        }
+        .content {
+            padding: 20px;
+        }
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            background-color: #343a40;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 侧边栏 -->
+            <div class="col-md-3 sidebar">
+                <h3 class="mb-4">眼动仪训练系统</h3>
+                <ul class="list-unstyled">
+                    <li><a th:href="@{/dashboard}">仪表盘</a></li>
+                    <li><a th:href="@{/training/code-examples}">代码示例</a></li>
+                    <li><a th:href="@{/training/list}">训练会话</a></li>
+                    <li><a th:href="@{/tobii/test}">眼动仪测试</a></li>
+                    <li><a th:href="@{/tobii/calibration}">眼动仪校准</a></li>
+                    <li><a th:href="@{/tobii/calibration/history}">校准历史</a></li>
+                    <li><a th:href="@{/user/profile}">个人资料</a></li>
+                    <li><a th:href="@{/settings}">系统设置</a></li>
+                    <li><a th:href="@{/user/logout}">退出登录</a></li>
+                </ul>
+            </div>
+
+            <!-- 主内容区 -->
+            <div class="col-md-9 content">
+                <h2 class="mb-4">仪表盘</h2>
+                
+                <!-- 开始训练按钮 -->
+                <div class="mb-4">
+                    <a th:href="@{/training/code-examples}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-play-circle-fill"></i> 开始训练
+                    </a>
+                </div>
+                
+                <!-- 统计卡片 -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-header">总训练次数</div>
+                            <div class="card-body">
+                                <h3>12</h3>
+                                <p class="text-muted">次</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-header">总训练时长</div>
+                            <div class="card-body">
+                                <h3>4.5</h3>
+                                <p class="text-muted">小时</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-header">平均注意力分数</div>
+                            <div class="card-body">
+                                <h3>78</h3>
+                                <p class="text-muted">分</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-header">完成率</div>
+                            <div class="card-body">
+                                <h3>85%</h3>
+                                <p class="text-muted">已完成</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 最近训练会话 -->
+                <div class="card">
+                    <div class="card-header">最近训练会话</div>
+                    <div class="card-body">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>会话名称</th>
+                                    <th>开始时间</th>
+                                    <th>持续时间</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Java基础代码阅读</td>
+                                    <td>2026-04-25 14:30</td>
+                                    <td>30分钟</td>
+                                    <td><span class="badge bg-success">已完成</span></td>
+                                    <td><a th:href="@{/training/detail/1}" class="btn btn-sm btn-primary">查看详情</a></td>
+                                </tr>
+                                <tr>
+                                    <td>Python函数练习</td>
+                                    <td>2026-04-24 10:15</td>
+                                    <td>25分钟</td>
+                                    <td><span class="badge bg-success">已完成</span></td>
+                                    <td><a th:href="@{/training/detail/2}" class="btn btn-sm btn-primary">查看详情</a></td>
+                                </tr>
+                                <tr>
+                                    <td>算法题解析</td>
+                                    <td>2026-04-23 16:45</td>
+                                    <td>40分钟</td>
+                                    <td><span class="badge bg-success">已完成</span></td>
+                                    <td><a th:href="@{/training/detail/3}" class="btn btn-sm btn-primary">查看详情</a></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

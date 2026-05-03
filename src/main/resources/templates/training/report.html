@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>训练报告 - 眼动仪训练系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin-top: 30px;
+        }
+        .card {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background-color: #343a40;
+            color: white;
+        }
+        .btn-primary {
+            background-color: #343a40;
+            border-color: #343a40;
+        }
+        .btn-primary:hover {
+            background-color: #495057;
+            border-color: #495057;
+        }
+        .score-card {
+            text-align: center;
+            padding: 20px;
+        }
+        .score-value {
+            font-size: 48px;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .score-label {
+            font-size: 18px;
+            color: #6c757d;
+        }
+        .chart-container {
+            height: 400px;
+            margin-top: 20px;
+        }
+        .recommendation-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .recommendation-list li {
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #343a40;
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3>训练报告</h3>
+                <div>
+                    <a th:href="@{/training/code-examples}" class="btn btn-primary">返回代码示例</a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card score-card">
+                            <div class="card-body">
+                                <div class="score-value" th:text="${report.attentionScore}"></div>
+                                <div class="score-label">注意力分数</div>
+                                <div class="mt-2">
+                                    <span class="badge bg-success">优秀</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h4>注意力模式</h4>
+                            </div>
+                            <div class="card-body">
+                                <p th:text="${report.focusPattern}"></p>
+                            </div>
+                        </div>
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h5>注意力指标详情</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">有效注视率</label>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar bg-success" role="progressbar" 
+                                             th:style="${'width: ' + fixationBarWidth + '%'}" 
+                                             th:text="${report.effectiveFixationRate + '%'}"></div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">回视次数</label>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar bg-warning" role="progressbar" 
+                                             th:style="${'width: ' + regressionBarWidth + '%'}" 
+                                             th:text="${report.regressionCount + '次'}"></div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">扫视熵</label>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar bg-info" role="progressbar" 
+                                             th:style="${'width: ' + entropyBarWidth + '%'}" 
+                                             th:text="${entropyDisplay}"></div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">数据质量</label>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar bg-secondary" role="progressbar" 
+                                             th:style="${'width: ' + qualityBarWidth + '%'}" 
+                                             th:text="${qualityDisplay + '%'}"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h4>眼动轨迹分析</h4>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <!-- 眼动轨迹热力图 -->
+                                    <div class="border rounded p-4" style="height: 350px; background-color: #f8f9fa;">
+                                        <p class="text-center">眼动轨迹热力图</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h4>建议</h4>
+                            </div>
+                            <div class="card-body">
+                                <ul class="recommendation-list">
+                                    <li th:each="line : ${#strings.listSplit(report.recommendations, '\n')}" th:text="${line}"></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h4>详细分析</h4>
+                            </div>
+                            <div class="card-body">
+                                <div class="code-block" th:text="${report.detailedAnalysis}"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h4>训练信息</h4>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <p><strong>训练会话：</strong><span th:text="${trainingSession.sessionName}"></span></p>
+                                        <p><strong>开始时间：</strong><span th:text="${trainingSession.startTime}"></span></p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <p><strong>结束时间：</strong><span th:text="${trainingSession.endTime}"></span></p>
+                                        <p><strong>持续时间：</strong><span th:text="${trainingSession.duration} + '分钟'"></span></p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <p><strong>状态：</strong><span class="badge bg-success">已完成</span></p>
+                                        <p><strong>报告生成时间：</strong><span th:text="${report.generatedAt}"></span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
