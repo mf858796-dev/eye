@@ -1,0 +1,10 @@
+target/
+maven.zip
+apache-maven-3.9.5/
+mvnw.cmd
+temp_bishe/
+*.zip
+*.jar
+.DS_Store
+.idea/
+*.iml
