@@ -27,6 +27,15 @@ public class GazeData {
     private Double zCoordinate;
 
     @Column
+    private Double gaze3dX;
+
+    @Column
+    private Double gaze3dY;
+
+    @Column
+    private Double gaze3dZ;
+
+    @Column
     private Double yaw;
 
     @Column
@@ -46,6 +55,15 @@ public class GazeData {
 
     @Column
     private String areaOfInterest;
+
+    @Column
+    private Integer lineNumber;
+
+    @Column
+    private Boolean targetMatched;
+
+    @Column
+    private String targetRegion;
 
     @Column
     private Double gazeOriginX;
@@ -128,6 +146,30 @@ public class GazeData {
         this.zCoordinate = zCoordinate;
     }
 
+    public Double getGaze3dX() {
+        return gaze3dX;
+    }
+
+    public void setGaze3dX(Double gaze3dX) {
+        this.gaze3dX = gaze3dX;
+    }
+
+    public Double getGaze3dY() {
+        return gaze3dY;
+    }
+
+    public void setGaze3dY(Double gaze3dY) {
+        this.gaze3dY = gaze3dY;
+    }
+
+    public Double getGaze3dZ() {
+        return gaze3dZ;
+    }
+
+    public void setGaze3dZ(Double gaze3dZ) {
+        this.gaze3dZ = gaze3dZ;
+    }
+
     public Double getYaw() {
         return yaw;
     }
@@ -182,6 +224,30 @@ public class GazeData {
 
     public void setAreaOfInterest(String areaOfInterest) {
         this.areaOfInterest = areaOfInterest;
+    }
+
+    public Integer getLineNumber() {
+        return lineNumber;
+    }
+
+    public void setLineNumber(Integer lineNumber) {
+        this.lineNumber = lineNumber;
+    }
+
+    public Boolean getTargetMatched() {
+        return targetMatched;
+    }
+
+    public void setTargetMatched(Boolean targetMatched) {
+        this.targetMatched = targetMatched;
+    }
+
+    public String getTargetRegion() {
+        return targetRegion;
+    }
+
+    public void setTargetRegion(String targetRegion) {
+        this.targetRegion = targetRegion;
     }
 
     public Double getGazeOriginX() {

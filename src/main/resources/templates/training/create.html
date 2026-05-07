@@ -39,6 +39,7 @@
             </div>
             <div class="card-body">
                 <form th:action="@{/training/create}" method="post">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                     <div class="mb-3">
                         <label for="sessionName" class="form-label">会话名称</label>
                         <input type="text" class="form-control" id="sessionName" name="sessionName" required>

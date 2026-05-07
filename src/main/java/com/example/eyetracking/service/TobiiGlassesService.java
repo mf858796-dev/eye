@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -25,20 +26,25 @@ public class TobiiGlassesService {
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final ExecutorService executorService = Executors.newSingleThreadExecutor();
     
+    @Value("${tobii.glasses.base-url:http://192.168.71.50:8080}")
+    private String configuredGlassesAddress;
+
     private String glassesAddress;
-    private boolean connected;
+    private volatile boolean connected;
     
     /**
      * 搜索并连接眼动仪
      * @return 连接是否成功
      */
     public boolean connect() {
+        return connect(configuredGlassesAddress);
+    }
+
+    public boolean connect(String baseUrl) {
         try {
             logger.info("[1/4] 正在搜索Tobii Pro Glasses 3设备...");
             
-            // 尝试自动发现设备（简化实现，实际可能需要zeroconf库）
-            // 这里假设设备在本地网络
-            glassesAddress = "http://192.168.71.50:8080";
+            glassesAddress = normalizeBaseUrl(baseUrl);
             
             // 测试连接
             if (testConnection()) {
@@ -65,6 +71,7 @@ public class TobiiGlassesService {
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
             
             int responseCode = connection.getResponseCode();
             return responseCode == 200;
@@ -109,9 +116,11 @@ public class TobiiGlassesService {
      * 获取序列号
      */
     private String getSerialNumber() throws IOException {
-        URL url = new URL(glassesAddress + "/api/system/serial");
+        URL url = new URL(currentGlassesAddress() + "/api/system/serial");
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(5000);
         
         if (connection.getResponseCode() == 200) {
             JsonNode response = objectMapper.readTree(connection.getInputStream());
@@ -124,9 +133,11 @@ public class TobiiGlassesService {
      * 获取固件版本
      */
     private String getFirmwareVersion() throws IOException {
-        URL url = new URL(glassesAddress + "/api/system/version");
+        URL url = new URL(currentGlassesAddress() + "/api/system/version");
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(5000);
         
         if (connection.getResponseCode() == 200) {
             JsonNode response = objectMapper.readTree(connection.getInputStream());
@@ -139,9 +150,11 @@ public class TobiiGlassesService {
      * 获取电池电量
      */
     private int getBatteryLevel() throws IOException {
-        URL url = new URL(glassesAddress + "/api/system/battery");
+        URL url = new URL(currentGlassesAddress() + "/api/system/battery");
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(5000);
         
         if (connection.getResponseCode() == 200) {
             JsonNode response = objectMapper.readTree(connection.getInputStream());
@@ -159,9 +172,11 @@ public class TobiiGlassesService {
             
             // 测试RTSP流连接
             // 这里简化实现，实际需要使用RTSP客户端
-            URL url = new URL(glassesAddress + "/api/stream/rtsp");
+            URL url = new URL(currentGlassesAddress() + "/api/stream/rtsp");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
             
             if (connection.getResponseCode() == 200) {
                 logger.info("✅ RTSP流连接成功");
@@ -184,9 +199,11 @@ public class TobiiGlassesService {
     public Future<GazeDataSample> getGazeData() {
         return executorService.submit(() -> {
             try {
-                URL url = new URL(glassesAddress + "/api/gaze");
+                URL url = new URL(currentGlassesAddress() + "/api/gaze");
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
+                connection.setConnectTimeout(3000);
+                connection.setReadTimeout(3000);
                 
                 if (connection.getResponseCode() == 200) {
                     JsonNode response = objectMapper.readTree(connection.getInputStream());
@@ -209,16 +226,18 @@ public class TobiiGlassesService {
                     // 获取gaze2d数据 (2D归一化坐标)
                     if (data.has("gaze2d")) {
                         JsonNode gaze2d = data.get("gaze2d");
-                        sample.setX(gaze2d.get(0).asDouble());
-                        sample.setY(gaze2d.get(1).asDouble());
+                        sample.setGaze2dX(readVectorValue(gaze2d, 0, "x"));
+                        sample.setGaze2dY(readVectorValue(gaze2d, 1, "y"));
+                        sample.setGaze2dValid(true);
                     }
                     
                     // 获取gaze3d数据 (3D坐标，单位：毫米)
                     if (data.has("gaze3d")) {
                         JsonNode gaze3d = data.get("gaze3d");
-                        sample.setX(gaze3d.get(0).asDouble());
-                        sample.setY(gaze3d.get(1).asDouble());
-                        sample.setZ(gaze3d.get(2).asDouble());
+                        sample.setX(readVectorValue(gaze3d, 0, "x"));
+                        sample.setY(readVectorValue(gaze3d, 1, "y"));
+                        sample.setZ(readVectorValue(gaze3d, 2, "z"));
+                        sample.setGaze3dValid(true);
                     }
                     
                     // 获取左眼数据
@@ -233,17 +252,17 @@ public class TobiiGlassesService {
                         // 左眼视线起点
                         if (eyeLeft.has("gazeorigin")) {
                             JsonNode origin = eyeLeft.get("gazeorigin");
-                            sample.setGazeOriginX(origin.get(0).asDouble());
-                            sample.setGazeOriginY(origin.get(1).asDouble());
-                            sample.setGazeOriginZ(origin.get(2).asDouble());
+                            sample.setGazeOriginX(readVectorValue(origin, 0, "x"));
+                            sample.setGazeOriginY(readVectorValue(origin, 1, "y"));
+                            sample.setGazeOriginZ(readVectorValue(origin, 2, "z"));
                         }
                         
                         // 左眼视线方向向量
                         if (eyeLeft.has("gazedirection")) {
                             JsonNode direction = eyeLeft.get("gazedirection");
-                            sample.setGazeDirectionX(direction.get(0).asDouble());
-                            sample.setGazeDirectionY(direction.get(1).asDouble());
-                            sample.setGazeDirectionZ(direction.get(2).asDouble());
+                            sample.setGazeDirectionX(readVectorValue(direction, 0, "x"));
+                            sample.setGazeDirectionY(readVectorValue(direction, 1, "y"));
+                            sample.setGazeDirectionZ(readVectorValue(direction, 2, "z"));
                         }
                     }
                     
@@ -282,6 +301,43 @@ public class TobiiGlassesService {
     public boolean isConnected() {
         return connected;
     }
+
+    public String getCurrentGlassesAddress() {
+        return currentGlassesAddress();
+    }
+
+    private String currentGlassesAddress() {
+        if (glassesAddress == null || glassesAddress.trim().isEmpty()) {
+            glassesAddress = normalizeBaseUrl(configuredGlassesAddress);
+        }
+        return glassesAddress;
+    }
+
+    private String normalizeBaseUrl(String baseUrl) {
+        String url = baseUrl == null || baseUrl.trim().isEmpty()
+                ? "http://192.168.71.50:8080"
+                : baseUrl.trim();
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            url = "http://" + url;
+        }
+        while (url.endsWith("/")) {
+            url = url.substring(0, url.length() - 1);
+        }
+        return url;
+    }
+
+    private double readVectorValue(JsonNode node, int index, String key) {
+        if (node == null) {
+            return 0.0;
+        }
+        if (node.isArray() && node.size() > index) {
+            return node.get(index).asDouble();
+        }
+        if (node.isObject() && node.has(key)) {
+            return node.get(key).asDouble();
+        }
+        return 0.0;
+    }
     
     /**
      * 眼动仪信息类
@@ -311,6 +367,11 @@ public class TobiiGlassesService {
         private double x;
         private double y;
         private double z;
+
+        private double gaze2dX;
+        private double gaze2dY;
+        private boolean gaze2dValid;
+        private boolean gaze3dValid;
         
         // 视线起点 (gaze origin) - 毫米
         private double gazeOriginX;
@@ -338,6 +399,18 @@ public class TobiiGlassesService {
         
         public double getZ() { return z; }
         public void setZ(double z) { this.z = z; }
+
+        public double getGaze2dX() { return gaze2dX; }
+        public void setGaze2dX(double gaze2dX) { this.gaze2dX = gaze2dX; }
+
+        public double getGaze2dY() { return gaze2dY; }
+        public void setGaze2dY(double gaze2dY) { this.gaze2dY = gaze2dY; }
+
+        public boolean isGaze2dValid() { return gaze2dValid; }
+        public void setGaze2dValid(boolean gaze2dValid) { this.gaze2dValid = gaze2dValid; }
+
+        public boolean isGaze3dValid() { return gaze3dValid; }
+        public void setGaze3dValid(boolean gaze3dValid) { this.gaze3dValid = gaze3dValid; }
         
         public double getGazeOriginX() { return gazeOriginX; }
         public void setGazeOriginX(double gazeOriginX) { this.gazeOriginX = gazeOriginX; }

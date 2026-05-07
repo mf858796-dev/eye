@@ -95,9 +95,39 @@
             font-family: 'Courier New', monospace;
             font-size: 14px;
             padding: 15px;
-            white-space: pre-wrap;
+            white-space: normal;
             overflow-y: auto;
             line-height: 1.5;
+        }
+        .code-line {
+            display: flex;
+            min-height: 21px;
+            border-radius: 4px;
+            padding: 0 6px 0 0;
+            transition: background-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .line-number {
+            flex: 0 0 44px;
+            margin-right: 10px;
+            color: #858585;
+            text-align: right;
+            user-select: none;
+        }
+        .line-code {
+            flex: 1 1 auto;
+            white-space: pre;
+            min-width: 0;
+        }
+        .target-line {
+            background-color: rgba(255, 193, 7, 0.12);
+            box-shadow: inset 3px 0 0 rgba(255, 193, 7, 0.9);
+        }
+        .current-gaze-line {
+            background-color: rgba(64, 196, 255, 0.18);
+        }
+        .completed-target-line {
+            background-color: rgba(40, 167, 69, 0.16);
+            box-shadow: inset 3px 0 0 rgba(40, 167, 69, 0.9);
         }
         .gaze-heatmap {
             position: absolute;
@@ -122,6 +152,17 @@
             font-size: 16px;
             font-weight: bold;
             color: #333;
+        }
+        .task-brief {
+            background-color: #eef6ff;
+            border: 1px solid #b7ddff;
+            border-radius: 4px;
+            color: #24435f;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+        }
+        .task-brief p {
+            margin-bottom: 4px;
         }
         .data-value-3d {
             font-family: monospace;
@@ -183,32 +224,158 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.3; }
         }
+        .training-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        body.fullscreen-training {
+            overflow: hidden;
+            background-color: #101418;
+        }
+        body.fullscreen-training .training-container {
+            width: 100%;
+            max-width: none;
+            height: 100vh;
+            margin: 0;
+            padding: 8px;
+        }
+        body.fullscreen-training .training-shell {
+            height: calc(100vh - 16px);
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 0;
+        }
+        body.fullscreen-training .training-shell > .card-header {
+            flex: 0 0 auto;
+            padding: 10px 14px;
+        }
+        body.fullscreen-training .training-shell > .card-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+        body.fullscreen-training .training-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+            padding: 12px;
+        }
+        body.fullscreen-training .training-layout {
+            height: 100%;
+        }
+        body.fullscreen-training .training-main {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        body.fullscreen-training .training-main h5 {
+            flex: 0 0 auto;
+            margin-bottom: 8px !important;
+            font-size: 1rem;
+        }
+        body.fullscreen-training .gaze-container {
+            flex: 1 1 auto;
+            height: auto;
+            min-height: 0;
+        }
+        body.fullscreen-training .code-overlay {
+            font-size: 15px;
+            padding: 18px;
+        }
+        body.fullscreen-training .training-sidebar {
+            height: 100%;
+            overflow-y: auto;
+            padding-bottom: 4px;
+        }
+        body.fullscreen-training .training-sidebar .card {
+            margin-bottom: 12px;
+        }
+        body.fullscreen-training .recording-indicator {
+            padding: 6px 12px;
+        }
+        @media (max-width: 767.98px) {
+            body.fullscreen-training {
+                overflow: auto;
+            }
+            body.fullscreen-training .training-container {
+                height: auto;
+                min-height: 100vh;
+            }
+            body.fullscreen-training .training-shell {
+                height: auto;
+                min-height: calc(100vh - 16px);
+            }
+            body.fullscreen-training .training-body {
+                overflow: visible;
+            }
+            body.fullscreen-training .training-layout,
+            body.fullscreen-training .training-main,
+            body.fullscreen-training .training-sidebar {
+                height: auto;
+            }
+            body.fullscreen-training .gaze-container {
+                height: 62vh;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="container training-container">
+        <div class="card training-shell">
+            <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
                 <h3>训练 - 代码阅读专注力训练</h3>
-                <div>
+                <div class="training-header-actions">
                     <span class="recording-indicator">
                         <span class="recording-dot"></span>
                         <span>REC</span>
                     </span>
-                    <span class="status-badge status-recording ml-2" id="connectionStatus">等待连接</span>
+                    <span class="status-badge status-recording" id="connectionStatus">等待连接</span>
+                    <button id="startCollection" class="btn btn-sm btn-light ms-2" style="display: none;">开始采集</button>
+                    <button id="fullscreenToggle" class="btn btn-sm btn-outline-light" type="button" aria-pressed="false" title="按 Esc 可退出全屏">全屏训练</button>
                 </div>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-8">
+            <div class="card-body training-body">
+                <div class="row training-layout">
+                    <div class="col-md-8 training-main">
                         <h5 class="mb-3">代码示例: <span th:text="${codeExample.title}"></span></h5>
+                        <div class="task-brief">
+                            <p><strong>训练类型：</strong><span th:text="${taskType}"></span></p>
+                            <p><strong>目标代码行：</strong><span th:text="${targetLinesRaw != null && !#strings.isEmpty(targetLinesRaw) ? targetLinesRaw : '未设置'}"></span></p>
+                            <p class="mb-0" th:if="${taskGuidance != null && !#strings.isEmpty(taskGuidance)}" th:text="${taskGuidance}"></p>
+                        </div>
                         <div class="gaze-container" id="gazeContainer">
                             <div class="code-overlay" th:text="${codeExample.code}"></div>
                             <canvas class="gaze-heatmap" id="gazeHeatmap"></canvas>
                             <div class="gaze-point" id="gazePoint" style="display: none;"></div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4 training-sidebar">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title">训练目标</h6>
+                                <div class="data-panel">
+                                    <div class="data-label">当前注视行</div>
+                                    <div class="data-value">第 <span id="currentLine">-</span> 行</div>
+                                </div>
+                                <div class="data-panel">
+                                    <div class="data-label">目标命中率</div>
+                                    <div class="data-value"><span id="targetHitRate">0.0</span>%</div>
+                                    <div class="progress mt-1" style="height: 6px;">
+                                        <div class="progress-bar bg-info" id="targetHitProgress" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div class="data-panel">
+                                    <div class="data-label">目标完成度</div>
+                                    <div class="data-value"><span id="targetCompletion">0.0</span>%</div>
+                                    <div class="progress mt-1" style="height: 6px;">
+                                        <div class="progress-bar bg-success" id="targetCompletionProgress" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="card mb-3">
                             <div class="card-body">
                                 <h6 class="card-title">训练计时</h6>
@@ -334,7 +501,22 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script th:inline="javascript">
         const sessionId = [[${trainingSession.id}]];
-        const glassesAddress = "http://192.168.71.50:8080";
+        const glassesAddress = [[${glassesAddress}]];
+        const apiStatusUrl = [[@{/tobii/api/status}]];
+        const apiGazeUrl = [[@{/tobii/api/gaze}]];
+        const tobiiTestUrl = [[@{/tobii/test}]];
+        const autoStart = [[${autoStart}]];
+        const showHeatmap = [[${showHeatmap}]];
+        const simulationMode = [[${simulationMode}]];
+        const GAZE_INTERVAL_MS = [[${gazeIntervalMs}]];
+        const SIMULATION_INTERVAL_MS = [[${simulationIntervalMs}]];
+        const codeText = [[${codeExample.code}]];
+        const targetLinesRaw = [[${targetLinesRaw}]];
+        const taskType = [[${taskType}]];
+        const targetLineNumbers = parseTargetLines(targetLinesRaw);
+        const targetLineSet = new Set(targetLineNumbers);
+        const GAZE3D_HORIZONTAL_FOV_DEGREES = 82;
+        const GAZE3D_VERTICAL_FOV_DEGREES = 52;
         let seconds = 0;
         let timerInterval;
         let gazeDataList = [];
@@ -348,9 +530,18 @@
         let gazeHistory = [];
         let filteredHistory = [];
         let fixationThresholdMs = 200;
-        let maxVelocity = 2000;
+        let fixationRadius = 80;
+        let maxVelocity = 4;
+        let currentLineElement = null;
+        let targetSamples = 0;
+        let targetHits = 0;
+        let completedTargetLines = new Set();
+        let targetFocusMsByLine = {};
+        const TARGET_LINE_FOCUS_MS = 500;
         
-        const TARGET_TRAINING_DURATION = 600;
+        const TARGET_TRAINING_DURATION = [[${targetTrainingDuration}]];
+        const fullscreenToggle = document.getElementById('fullscreenToggle');
+        const trainingContainer = document.querySelector('.training-container');
         
         function startTimer() {
             timerInterval = setInterval(() => {
@@ -368,27 +559,161 @@
                 document.getElementById('progressText').textContent = Math.round(progress) + '%';
             }, 1000);
         }
+
+        function parseTargetLines(value) {
+            if (!value || typeof value !== 'string') {
+                return [];
+            }
+            const lines = new Set();
+            value.split(',').map(item => item.trim()).filter(Boolean).forEach(item => {
+                if (item.includes('-')) {
+                    const [startRaw, endRaw] = item.split('-', 2);
+                    const start = parseInt(startRaw, 10);
+                    const end = parseInt(endRaw, 10);
+                    if (!Number.isNaN(start) && !Number.isNaN(end)) {
+                        const from = Math.min(start, end);
+                        const to = Math.max(start, end);
+                        for (let line = from; line <= to; line++) {
+                            lines.add(line);
+                        }
+                    }
+                    return;
+                }
+                const line = parseInt(item, 10);
+                if (!Number.isNaN(line)) {
+                    lines.add(line);
+                }
+            });
+            return Array.from(lines).sort((a, b) => a - b);
+        }
+
+        function renderCodeOverlay() {
+            const codeOverlay = document.querySelector('#gazeContainer .code-overlay');
+            if (!codeOverlay) {
+                return;
+            }
+
+            currentLineElement = null;
+            codeOverlay.innerHTML = '';
+            codeText.split('\n').forEach((line, index) => {
+                const lineNumber = index + 1;
+                const row = document.createElement('div');
+                row.className = 'code-line';
+                row.dataset.lineNumber = lineNumber;
+                if (targetLineSet.has(lineNumber)) {
+                    row.classList.add('target-line');
+                }
+                if (completedTargetLines.has(lineNumber)) {
+                    row.classList.add('completed-target-line');
+                }
+
+                const number = document.createElement('span');
+                number.className = 'line-number';
+                number.textContent = lineNumber;
+
+                const content = document.createElement('span');
+                content.className = 'line-code';
+                content.textContent = line || ' ';
+
+                row.appendChild(number);
+                row.appendChild(content);
+                codeOverlay.appendChild(row);
+            });
+        }
+
+        function getFullscreenElement() {
+            return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+        }
+
+        function refreshHeatmapSize() {
+            if (showHeatmap) {
+                window.setTimeout(drawHeatmap, 120);
+            }
+        }
+
+        function syncFullscreenLayout(isFullscreen) {
+            const active = typeof isFullscreen === 'boolean' ? isFullscreen : Boolean(getFullscreenElement());
+            document.body.classList.toggle('fullscreen-training', active);
+            fullscreenToggle.textContent = active ? '退出全屏' : '全屏训练';
+            fullscreenToggle.setAttribute('aria-pressed', String(active));
+            refreshHeatmapSize();
+        }
+
+        async function toggleFullscreenTraining() {
+            const isFullscreen = Boolean(getFullscreenElement());
+
+            if (!isFullscreen) {
+                const target = trainingContainer || document.documentElement;
+                const requestFullscreen = target.requestFullscreen || target.webkitRequestFullscreen || target.msRequestFullscreen;
+
+                if (!requestFullscreen) {
+                    syncFullscreenLayout(!document.body.classList.contains('fullscreen-training'));
+                    return;
+                }
+
+                try {
+                    const result = requestFullscreen.call(target);
+                    if (result && typeof result.then === 'function') {
+                        await result;
+                    }
+                    syncFullscreenLayout(true);
+                } catch (error) {
+                    syncFullscreenLayout(Boolean(getFullscreenElement()));
+                }
+                return;
+            }
+
+            const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+            if (!exitFullscreen) {
+                syncFullscreenLayout(false);
+                return;
+            }
+
+            try {
+                const result = exitFullscreen.call(document);
+                if (result && typeof result.then === 'function') {
+                    await result;
+                }
+                syncFullscreenLayout(false);
+            } catch (error) {
+                syncFullscreenLayout(Boolean(getFullscreenElement()));
+            }
+        }
         
+        function restoreTrainingSurface() {
+            const container = document.getElementById('gazeContainer');
+            container.innerHTML = `
+                <div class="code-overlay"></div>
+                <canvas class="gaze-heatmap" id="gazeHeatmap"></canvas>
+                <div class="gaze-point" id="gazePoint" style="display: none;"></div>
+            `;
+
+            const codeOverlay = container.querySelector('.code-overlay');
+            codeOverlay.textContent = codeText;
+            renderCodeOverlay();
+
+            if (!showHeatmap) {
+                document.getElementById('gazeHeatmap').style.display = 'none';
+            }
+        }
+
         function connectToGlasses() {
-            fetch(glassesAddress + '/api/system/version', { method: 'GET' })
-                .then(response => {
-                    if (response.ok) {
+            stopGazeCollection();
+            document.getElementById('startCollection').style.display = 'none';
+
+            if (simulationMode) {
+                startSimulationMode();
+                return;
+            }
+
+            fetch(apiStatusUrl, { method: 'GET' })
+                .then(response => response.json())
+                .then(status => {
+                    if (status.connected) {
                         isRecording = true;
                         document.getElementById('connectionStatus').textContent = '已连接';
                         document.getElementById('connectionStatus').className = 'status-badge status-connected';
-                        
-                        // 恢复原始内容
-                        const container = document.getElementById('gazeContainer');
-                        container.innerHTML = `
-                            <div class="code-overlay"></div>
-                            <canvas class="gaze-heatmap" id="gazeHeatmap"></canvas>
-                            <div class="gaze-point" id="gazePoint" style="display: none;"></div>
-                        `;
-                        
-                        // 重新填充代码内容
-                        const codeOverlay = container.querySelector('.code-overlay');
-                        codeOverlay.textContent = [[${codeExample.code}]];
-                        
+                        restoreTrainingSurface();
                         startGazeDataCollection();
                     } else {
                         showConnectionRequired();
@@ -414,53 +739,121 @@
                     <h5 class="text-muted mb-3">眼动仪未连接</h5>
                     <p class="text-muted">请先连接眼动仪设备或使用模拟模式测试</p>
                     <div class="d-flex flex-column gap-2 mt-4">
-                        <a href="/eye-tracking/tobii/test" class="btn btn-primary">前往连接页面</a>
+                        <a href="${tobiiTestUrl}" class="btn btn-primary">前往连接页面</a>
                         <button id="simulateButton" class="btn btn-secondary">使用模拟数据</button>
                     </div>
                 </div>
             `;
             
             // 添加模拟按钮点击事件
-            document.getElementById('simulateButton').addEventListener('click', function() {
-                isRecording = true;
-                document.getElementById('connectionStatus').textContent = '模拟模式';
-                document.getElementById('connectionStatus').className = 'status-badge status-recording';
-                
-                // 恢复原始内容
-                const container = document.getElementById('gazeContainer');
-                container.innerHTML = `
-                    <div class="code-overlay"></div>
-                    <canvas class="gaze-heatmap" id="gazeHeatmap"></canvas>
-                    <div class="gaze-point" id="gazePoint" style="display: none;"></div>
-                `;
-                
-                // 重新填充代码内容
-                const codeOverlay = container.querySelector('.code-overlay');
-                codeOverlay.textContent = [[${codeExample.code}]];
-                
-                // 开始鼠标模拟模式
-                startMouseSimulation();
-            });
+            document.getElementById('simulateButton').addEventListener('click', startSimulationMode);
+        }
+
+        function startSimulationMode() {
+            stopGazeCollection();
+            isRecording = true;
+            document.getElementById('connectionStatus').textContent = '模拟模式';
+            document.getElementById('connectionStatus').className = 'status-badge status-recording';
+            document.getElementById('startCollection').style.display = 'none';
+            restoreTrainingSurface();
+            startMouseSimulation();
         }
         
         function startGazeDataCollection() {
+            stopGazeCollection();
             gazeUpdateInterval = setInterval(async () => {
                 try {
-                    const response = await fetch(glassesAddress + '/api/gaze');
+                    const response = await fetch(apiGazeUrl);
                     if (response.ok) {
                         const data = await response.json();
+                        if (data.connected === false || data.error) {
+                            throw new Error(data.error || '眼动仪未连接');
+                        }
                         processGazeData(data);
                     }
                 } catch (error) {
-                    console.log('使用模拟数据');
+                    document.getElementById('connectionStatus').textContent = '模拟补偿';
+                    document.getElementById('connectionStatus').className = 'status-badge status-recording';
                     simulateSingleGazePoint();
                 }
-            }, 50);
+            }, GAZE_INTERVAL_MS);
+        }
+
+        function stopGazeCollection() {
+            if (gazeUpdateInterval) {
+                clearInterval(gazeUpdateInterval);
+                gazeUpdateInterval = null;
+            }
+        }
+
+        function toVector(value, fallback) {
+            if (Array.isArray(value)) {
+                return {
+                    x: numberOr(value[0], fallback.x),
+                    y: numberOr(value[1], fallback.y),
+                    z: numberOr(value[2], fallback.z || 0)
+                };
+            }
+            if (value && typeof value === 'object') {
+                return {
+                    x: numberOr(value.x, fallback.x),
+                    y: numberOr(value.y, fallback.y),
+                    z: numberOr(value.z, fallback.z || 0)
+                };
+            }
+            return fallback;
+        }
+
+        function numberOr(value, fallback) {
+            const numberValue = Number(value);
+            return Number.isFinite(numberValue) ? numberValue : fallback;
+        }
+
+        function resolveScreenGaze(payload, gaze3d, fallbackGaze2d) {
+            if (payload && payload.gaze) {
+                return {
+                    x: numberOr(payload.gaze.normalizedX, 0.5),
+                    y: numberOr(payload.gaze.normalizedY, 0.5),
+                    source: payload.gaze.source || 'gaze3d'
+                };
+            }
+            return projectGaze3dToNormalized(gaze3d, fallbackGaze2d);
+        }
+
+        function projectGaze3dToNormalized(gaze3d, fallbackGaze2d) {
+            const z = Math.abs(numberOr(gaze3d.z, 0));
+            if (z < 1) {
+                return {
+                    x: fallbackGaze2d ? numberOr(fallbackGaze2d.x, 0.5) : 0.5,
+                    y: fallbackGaze2d ? numberOr(fallbackGaze2d.y, 0.5) : 0.5,
+                    source: 'gaze2d-fallback'
+                };
+            }
+            const halfHorizontal = Math.tan((GAZE3D_HORIZONTAL_FOV_DEGREES / 2) * Math.PI / 180);
+            const halfVertical = Math.tan((GAZE3D_VERTICAL_FOV_DEGREES / 2) * Math.PI / 180);
+            const normalizedX = 0.5 + (gaze3d.x / z) / (2 * halfHorizontal);
+            const normalizedY = 0.5 - (gaze3d.y / z) / (2 * halfVertical);
+            return {
+                x: Math.max(0, Math.min(1, normalizedX)),
+                y: Math.max(0, Math.min(1, normalizedY)),
+                source: 'gaze3d'
+            };
+        }
+
+        function normalizedToGaze3d(normalizedX, normalizedY, depth) {
+            const halfHorizontal = Math.tan((GAZE3D_HORIZONTAL_FOV_DEGREES / 2) * Math.PI / 180);
+            const halfVertical = Math.tan((GAZE3D_VERTICAL_FOV_DEGREES / 2) * Math.PI / 180);
+            return {
+                x: (normalizedX - 0.5) * 2 * halfHorizontal * depth,
+                y: (0.5 - normalizedY) * 2 * halfVertical * depth,
+                z: depth
+            };
         }
         
         function processGazeData(data) {
             let gaze3d = {x: 0, y: 0, z: 0};
             let gaze2d = {x: 0.5, y: 0.5};
+            let screenGaze = {x: 0.5, y: 0.5, source: 'fallback'};
             let gazeOrigin = {x: 0, y: 0, z: 0};
             let gazeDirection = {x: 0, y: 0, z: -1};
             let leftPupil = 0;
@@ -468,17 +861,17 @@
             
             if (data.data) {
                 if (data.data.gaze3d) {
-                    gaze3d = data.data.gaze3d;
+                    gaze3d = toVector(data.data.gaze3d, gaze3d);
                 }
                 if (data.data.gaze2d) {
-                    gaze2d = data.data.gaze2d;
+                    gaze2d = toVector(data.data.gaze2d, gaze2d);
                 }
                 if (data.data.eyeleft) {
                     if (data.data.eyeleft.gazeorigin) {
-                        gazeOrigin = data.data.eyeleft.gazeorigin;
+                        gazeOrigin = toVector(data.data.eyeleft.gazeorigin, gazeOrigin);
                     }
                     if (data.data.eyeleft.gazedirection) {
-                        gazeDirection = data.data.eyeleft.gazedirection;
+                        gazeDirection = toVector(data.data.eyeleft.gazedirection, gazeDirection);
                     }
                     if (data.data.eyeleft.pupildiameter) {
                         leftPupil = data.data.eyeleft.pupildiameter;
@@ -487,13 +880,14 @@
                 if (data.data.eyeright && data.data.eyeright.pupildiameter) {
                     rightPupil = data.data.eyeright.pupildiameter;
                 }
+                screenGaze = resolveScreenGaze(data.data, gaze3d, gaze2d);
             }
             
-            updateGazeDisplay(gaze3d, gazeOrigin, gazeDirection, leftPupil, rightPupil, gaze2d);
-            recordGazePoint(gaze3d, gaze2d, leftPupil, rightPupil);
+            updateGazeDisplay(gaze3d, gazeOrigin, gazeDirection, leftPupil, rightPupil, screenGaze);
+            recordGazePoint(gaze3d, screenGaze, leftPupil, rightPupil, gazeOrigin, gazeDirection, gaze2d);
         }
         
-        function updateGazeDisplay(gaze3d, gazeOrigin, gazeDirection, leftPupil, rightPupil, gaze2d) {
+        function updateGazeDisplay(gaze3d, gazeOrigin, gazeDirection, leftPupil, rightPupil, screenGaze) {
             document.getElementById('gazeX').textContent = gaze3d.x.toFixed(2);
             document.getElementById('gazeY').textContent = gaze3d.y.toFixed(2);
             document.getElementById('gazeZ').textContent = gaze3d.z.toFixed(2);
@@ -509,30 +903,47 @@
             const container = document.getElementById('gazeContainer');
             const gazePoint = document.getElementById('gazePoint');
             const rect = container.getBoundingClientRect();
-            const x = gaze2d.x * rect.width;
-            const y = gaze2d.y * rect.height;
+            const x = screenGaze.x * rect.width;
+            const y = screenGaze.y * rect.height;
             
             gazePoint.style.display = 'block';
             gazePoint.style.left = x + 'px';
             gazePoint.style.top = y + 'px';
         }
         
-        function recordGazePoint(gaze3d, gaze2d, leftPupil, rightPupil) {
+        function recordGazePoint(gaze3d, screenGaze, leftPupil, rightPupil, gazeOrigin, gazeDirection, gaze2d) {
             sampleCount++;
             document.getElementById('sampleCount').textContent = sampleCount;
             
             const timestamp = Date.now();
+            const fixationDuration = Math.floor(Math.random() * 200) + 100;
+            const lineInfo = updateTargetTracking(screenGaze, fixationDuration);
             const point = {
                 timestamp: timestamp,
                 x: gaze3d.x,
                 y: gaze3d.y,
                 z: gaze3d.z,
-                gaze2dX: gaze2d.x,
-                gaze2dY: gaze2d.y,
+                gaze3dX: gaze3d.x,
+                gaze3dY: gaze3d.y,
+                gaze3dZ: gaze3d.z,
+                screenNormalizedX: screenGaze.x,
+                screenNormalizedY: screenGaze.y,
+                gaze2dX: gaze2d ? gaze2d.x : null,
+                gaze2dY: gaze2d ? gaze2d.y : null,
                 leftPupil: leftPupil,
                 rightPupil: rightPupil,
+                gazeOriginX: gazeOrigin.x,
+                gazeOriginY: gazeOrigin.y,
+                gazeOriginZ: gazeOrigin.z,
+                gazeDirectionX: gazeDirection.x,
+                gazeDirectionY: gazeDirection.y,
+                gazeDirectionZ: gazeDirection.z,
+                areaOfInterest: lineInfo.areaOfInterest,
+                lineNumber: lineInfo.lineNumber,
+                targetMatched: lineInfo.targetMatched,
+                targetRegion: lineInfo.targetRegion,
                 fixationType: 'FIXATION',
-                fixationDuration: Math.floor(Math.random() * 200) + 100
+                fixationDuration: fixationDuration
             };
             
             gazeDataList.push(point);
@@ -541,8 +952,8 @@
             if (point.fixationType === 'FIXATION') {
                 const container = document.getElementById('gazeContainer');
                 const rect = container.getBoundingClientRect();
-                const x = gaze2d.x * rect.width;
-                const y = gaze2d.y * rect.height;
+                const x = screenGaze.x * rect.width;
+                const y = screenGaze.y * rect.height;
                 
                 // 创建注视点标记
                 const fixationMarker = document.createElement('div');
@@ -566,11 +977,11 @@
                 }, 3000);
             }
             
-            fixationPoints.push({x: gaze2d.x, y: gaze2d.y, time: timestamp});
+            fixationPoints.push({x: screenGaze.x, y: screenGaze.y, time: timestamp});
             
-            if (isValidGazePoint(gaze2d.x, gaze2d.y)) {
-                gazeHistory.push({x: gaze2d.x, y: gaze2d.y, timestamp: timestamp});
-                const cleanedPoint = cleanGazeData(gaze2d.x, gaze2d.y, timestamp);
+            if (isValidGaze3dPoint(gaze3d)) {
+                gazeHistory.push({x: gaze3d.x, y: gaze3d.y, z: gaze3d.z, timestamp: timestamp});
+                const cleanedPoint = cleanGazeData(gaze3d.x, gaze3d.y, gaze3d.z, timestamp);
                 if (cleanedPoint) {
                     filteredHistory.push(cleanedPoint);
                 }
@@ -588,20 +999,87 @@
                     Math.round(totalFixationDuration / fixationCount);
             }
         }
-        
-        function isValidGazePoint(x, y) {
-            if (x < 0 || y < 0 || x > 1 || y > 1) {
-                return false;
+
+        function updateTargetTracking(gaze2d, fixationDuration) {
+            const lineNumber = getLineNumberFromGaze(gaze2d);
+            const hasTargets = targetLineSet.size > 0;
+            const targetMatched = lineNumber !== null && (hasTargets ? targetLineSet.has(lineNumber) : true);
+
+            if (lineNumber !== null) {
+                document.getElementById('currentLine').textContent = lineNumber;
+                highlightCurrentLine(lineNumber);
+                targetSamples++;
+                if (targetMatched) {
+                    targetHits++;
+                    targetFocusMsByLine[lineNumber] = (targetFocusMsByLine[lineNumber] || 0) + fixationDuration;
+                    if (targetFocusMsByLine[lineNumber] >= TARGET_LINE_FOCUS_MS) {
+                        completedTargetLines.add(lineNumber);
+                        const lineElement = document.querySelector(`.code-line[data-line-number="${lineNumber}"]`);
+                        if (lineElement) {
+                            lineElement.classList.add('completed-target-line');
+                        }
+                    }
+                }
             }
-            if (x === 0 && y === 0) {
-                return false;
+
+            updateTargetPanels();
+            return {
+                lineNumber: lineNumber,
+                targetMatched: targetMatched,
+                areaOfInterest: lineNumber === null ? 'outside-code' : (targetMatched ? 'target-code' : 'code'),
+                targetRegion: targetMatched ? `line-${lineNumber}` : (lineNumber === null ? 'outside-code' : 'non-target-code')
+            };
+        }
+
+        function getLineNumberFromGaze(gaze2d) {
+            const container = document.getElementById('gazeContainer');
+            const rect = container.getBoundingClientRect();
+            const x = rect.left + gaze2d.x * rect.width;
+            const y = rect.top + gaze2d.y * rect.height;
+            const element = document.elementFromPoint(x, y);
+            const lineElement = element ? element.closest('.code-line') : null;
+            if (!lineElement || !container.contains(lineElement)) {
+                return null;
             }
-            return true;
+            const lineNumber = parseInt(lineElement.dataset.lineNumber, 10);
+            return Number.isNaN(lineNumber) ? null : lineNumber;
+        }
+
+        function highlightCurrentLine(lineNumber) {
+            if (currentLineElement) {
+                currentLineElement.classList.remove('current-gaze-line');
+            }
+            currentLineElement = document.querySelector(`.code-line[data-line-number="${lineNumber}"]`);
+            if (currentLineElement) {
+                currentLineElement.classList.add('current-gaze-line');
+            }
+        }
+
+        function updateTargetPanels() {
+            const hitRate = targetSamples === 0 ? 0 : targetHits * 100 / targetSamples;
+            const completion = targetLineSet.size === 0 ? (targetSamples > 0 ? 100 : 0) : completedTargetLines.size * 100 / targetLineSet.size;
+            document.getElementById('targetHitRate').textContent = hitRate.toFixed(1);
+            document.getElementById('targetHitProgress').style.width = Math.min(100, hitRate) + '%';
+            document.getElementById('targetCompletion').textContent = completion.toFixed(1);
+            document.getElementById('targetCompletionProgress').style.width = Math.min(100, completion) + '%';
         }
         
-        function cleanGazeData(x, y, timestamp) {
+        function isValidGaze3dPoint(gaze3d) {
+            if (!gaze3d) {
+                return false;
+            }
+            return Number.isFinite(gaze3d.x)
+                && Number.isFinite(gaze3d.y)
+                && Number.isFinite(gaze3d.z)
+                && Math.abs(gaze3d.z) >= 1
+                && Math.abs(gaze3d.x) <= 10000
+                && Math.abs(gaze3d.y) <= 10000
+                && Math.abs(gaze3d.z) <= 20000;
+        }
+        
+        function cleanGazeData(x, y, z, timestamp) {
             if (filteredHistory.length < 2) {
-                return {x: x, y: y, timestamp: timestamp};
+                return {x: x, y: y, z: z, timestamp: timestamp};
             }
             
             const prev = filteredHistory[filteredHistory.length - 1];
@@ -611,14 +1089,22 @@
                 return null;
             }
             
-            const distance = Math.sqrt(Math.pow(x - prev.x, 2) + Math.pow(y - prev.y, 2));
+            const current = {x: x, y: y, z: z, timestamp: timestamp};
+            const distance = gazeDistance(current, prev);
             const velocity = distance / dt;
             
             if (velocity > maxVelocity) {
-                return {x: prev.x, y: prev.y, timestamp: timestamp};
+                return {x: prev.x, y: prev.y, z: prev.z, timestamp: timestamp};
             }
             
-            return {x: x, y: y, timestamp: timestamp};
+            return current;
+        }
+
+        function gazeDistance(current, previous) {
+            const dx = current.x - previous.x;
+            const dy = current.y - previous.y;
+            const dz = numberOr(current.z, 0) - numberOr(previous.z, 0);
+            return Math.sqrt(dx * dx + dy * dy + dz * dz);
         }
         
         function updateAttentionMetrics() {
@@ -664,25 +1150,32 @@
                 };
             }
             
-            const totalDuration = (gazeHistory[gazeHistory.length - 1].timestamp - gazeHistory[0].timestamp) / 1000;
-            
-            let fixationTime = 0;
-            const avgInterval = totalDuration / gazeHistory.length;
-            const positionMap = {};
-            
-            for (const point of gazeHistory) {
-                const key = `${point.x.toFixed(3)},${point.y.toFixed(3)}`;
-                if (!positionMap[key]) {
-                    positionMap[key] = {count: 0, firstTime: point.timestamp};
+            const totalDurationMs = gazeHistory[gazeHistory.length - 1].timestamp - gazeHistory[0].timestamp;
+            if (totalDurationMs <= 0) {
+                return {
+                    effectiveFixationRate: 0,
+                    regressionCount: 0,
+                    saccadeEntropy: 0,
+                    dataQualityScore: filteredHistory.length / gazeHistory.length
+                };
+            }
+
+            let fixationTimeMs = 0;
+            for (let i = 1; i < filteredHistory.length; i++) {
+                const current = filteredHistory[i];
+                const previous = filteredHistory[i - 1];
+                const interval = current.timestamp - previous.timestamp;
+                if (interval <= 0) {
+                    continue;
                 }
-                positionMap[key].count++;
+
+                const distance = gazeDistance(current, previous);
+                if (distance <= fixationRadius || interval >= fixationThresholdMs) {
+                    fixationTimeMs += interval;
+                }
             }
-            
-            for (const key in positionMap) {
-                fixationTime += positionMap[key].count * avgInterval;
-            }
-            
-            const effectiveFixationRate = Math.min(1.0, fixationTime / totalDuration);
+
+            const effectiveFixationRate = Math.min(1.0, fixationTimeMs / totalDurationMs);
             
             let regressionCount = 0;
             const threshold = 0.02;
@@ -694,7 +1187,7 @@
             
             const saccadeEntropy = calculateSaccadeEntropy();
             
-            const dataQualityScore = filteredHistory.length / gazeHistory.length;
+            const dataQualityScore = gazeHistory.length === 0 ? 0 : filteredHistory.length / gazeHistory.length;
             
             return {
                 effectiveFixationRate: effectiveFixationRate,
@@ -711,10 +1204,7 @@
             
             const distances = [];
             for (let i = 1; i < filteredHistory.length; i++) {
-                const dist = Math.sqrt(
-                    Math.pow(filteredHistory[i].x - filteredHistory[i - 1].x, 2) +
-                    Math.pow(filteredHistory[i].y - filteredHistory[i - 1].y, 2)
-                );
+                const dist = gazeDistance(filteredHistory[i], filteredHistory[i - 1]);
                 distances.push(dist);
             }
             
@@ -723,7 +1213,7 @@
             }
             
             const bins = new Array(10).fill(0);
-            const min = 0, max = 0.5;
+            const min = 0, max = 500;
             const binWidth = (max - min) / 10;
             
             for (const d of distances) {
@@ -782,15 +1272,13 @@
             // 定期更新眼动数据
             gazeUpdateInterval = setInterval(() => {
                 updateMouseGazeData();
-            }, 50);
+            }, SIMULATION_INTERVAL_MS);
         }
         
         function updateMouseGazeData() {
-            const gaze3d = {
-                x: (mouseX - 0.5) * 100,
-                y: (mouseY - 0.5) * 100,
-                z: 400 + Math.random() * 100
-            };
+            const depth = 400 + Math.random() * 100;
+            const gaze3d = normalizedToGaze3d(mouseX, mouseY, depth);
+            const screenGaze = projectGaze3dToNormalized(gaze3d, null);
             const gaze2d = {
                 x: mouseX,
                 y: mouseY
@@ -808,20 +1296,17 @@
             const leftPupil = 3 + Math.random() * 2;
             const rightPupil = 3 + Math.random() * 2;
             
-            updateGazeDisplay(gaze3d, gazeOrigin, gazeDirection, leftPupil, rightPupil, gaze2d);
-            recordGazePoint(gaze3d, gaze2d, leftPupil, rightPupil);
+            updateGazeDisplay(gaze3d, gazeOrigin, gazeDirection, leftPupil, rightPupil, screenGaze);
+            recordGazePoint(gaze3d, screenGaze, leftPupil, rightPupil, gazeOrigin, gazeDirection, gaze2d);
         }
         
         function simulateSingleGazePoint() {
-            const gaze3d = {
-                x: Math.random() * 100 - 50,
-                y: Math.random() * 100 - 50,
-                z: Math.random() * 500 + 300
-            };
             const gaze2d = {
                 x: 0.3 + Math.random() * 0.4,
                 y: 0.3 + Math.random() * 0.4
             };
+            const gaze3d = normalizedToGaze3d(gaze2d.x, gaze2d.y, Math.random() * 500 + 300);
+            const screenGaze = projectGaze3dToNormalized(gaze3d, null);
             const gazeOrigin = {
                 x: Math.random() * 10 - 5,
                 y: Math.random() * 10 - 5,
@@ -835,11 +1320,14 @@
             const leftPupil = 2 + Math.random() * 3;
             const rightPupil = 2 + Math.random() * 3;
             
-            updateGazeDisplay(gaze3d, gazeOrigin, gazeDirection, leftPupil, rightPupil, gaze2d);
-            recordGazePoint(gaze3d, gaze2d, leftPupil, rightPupil);
+            updateGazeDisplay(gaze3d, gazeOrigin, gazeDirection, leftPupil, rightPupil, screenGaze);
+            recordGazePoint(gaze3d, screenGaze, leftPupil, rightPupil, gazeOrigin, gazeDirection, gaze2d);
         }
         
         function drawHeatmap() {
+            if (!showHeatmap) {
+                return;
+            }
             const canvas = document.getElementById('gazeHeatmap');
             const ctx = canvas.getContext('2d');
             const container = document.getElementById('gazeContainer');
@@ -875,16 +1363,31 @@
         
         document.getElementById('endTraining').addEventListener('click', function() {
             clearInterval(timerInterval);
-            if (gazeUpdateInterval) {
-                clearInterval(gazeUpdateInterval);
-            }
+            stopGazeCollection();
             isRecording = false;
             document.getElementById('gazeDataJson').value = collectGazeData();
             document.getElementById('gazeDataForm').submit();
         });
         
         startTimer();
-        setTimeout(connectToGlasses, 1000);
+        renderCodeOverlay();
+        updateTargetPanels();
+        if (!showHeatmap) {
+            document.getElementById('gazeHeatmap').style.display = 'none';
+        }
+        fullscreenToggle.addEventListener('click', toggleFullscreenTraining);
+        document.addEventListener('fullscreenchange', () => syncFullscreenLayout());
+        document.addEventListener('webkitfullscreenchange', () => syncFullscreenLayout());
+        document.addEventListener('msfullscreenchange', () => syncFullscreenLayout());
+        window.addEventListener('resize', refreshHeatmapSize);
+        document.getElementById('startCollection').addEventListener('click', connectToGlasses);
+        if (autoStart) {
+            setTimeout(connectToGlasses, 1000);
+        } else {
+            document.getElementById('connectionStatus').textContent = '待开始';
+            document.getElementById('connectionStatus').className = 'status-badge status-disconnected';
+            document.getElementById('startCollection').style.display = 'inline-block';
+        }
     </script>
 </body>
 </html>

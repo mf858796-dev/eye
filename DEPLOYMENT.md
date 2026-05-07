@@ -4,7 +4,7 @@
 
 - JDK 8 或更高版本
 - Maven 3.6 或更高版本
-- MySQL 5.7 或更高版本（生产环境）
+- MySQL 5.7 或更高版本（仅生产环境需要）
 
 ## 安装步骤
 
@@ -18,14 +18,24 @@ cd bishe
 ### 2. 编译项目
 
 ```bash
-mvn clean package -DskipTests
+.\apache-maven-3.9.5\bin\mvn.cmd clean package
 ```
 
 ### 3. 配置数据库
 
 #### 开发环境（H2数据库）
 
-开发环境使用内嵌的H2数据库，无需额外配置。
+开发环境使用内嵌 H2 数据库，无需额外配置。H2 控制台地址：
+
+```text
+http://localhost:8080/eye-tracking/h2-console
+```
+
+连接地址：
+
+```text
+jdbc:h2:mem:eye_tracking_system
+```
 
 #### 生产环境（MySQL数据库）
 
@@ -35,12 +45,13 @@ mvn clean package -DskipTests
 CREATE DATABASE eye_tracking_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. 更新 `application-production.properties` 文件中的数据库配置：
+2. 推荐通过环境变量配置生产数据库：
 
-```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/eye_tracking_system
-spring.datasource.username=your_username
-spring.datasource.password=your_password
+```bash
+set DB_URL=jdbc:mysql://localhost:3306/eye_tracking_system?useUnicode=true^&characterEncoding=UTF-8^&serverTimezone=Asia/Shanghai
+set DB_USERNAME=your_username
+set DB_PASSWORD=your_password
+set APP_ADMIN_PASSWORD=change_me
 ```
 
 ## 运行系统
@@ -48,7 +59,7 @@ spring.datasource.password=your_password
 ### 开发环境运行
 
 ```bash
-mvn spring-boot:run
+.\apache-maven-3.9.5\bin\mvn.cmd spring-boot:run
 ```
 
 ### 生产环境运行
@@ -67,10 +78,12 @@ java -jar -Dspring.profiles.active=production target/eye-tracking-system-1.0.0.j
 - **仪表盘**：http://localhost:8080/eye-tracking/dashboard
 - **代码示例**：http://localhost:8080/eye-tracking/training/code-examples
 
-## 默认用户
+## 默认演示用户
 
 - 用户名：`admin`
 - 密码：`admin`
+
+首次启动时系统会自动创建该账号。生产环境请通过 `APP_ADMIN_PASSWORD` 修改默认密码。
 
 ## 系统功能
 

@@ -43,6 +43,12 @@ public class CalibrationData {
     private Double gazeZ; // 眼动z坐标 (3D, 毫米)
 
     @Column
+    private Double normalizedGazeX; // 归一化2D注视点X
+
+    @Column
+    private Double normalizedGazeY; // 归一化2D注视点Y
+
+    @Column
     private Double leftPupilDiameter; // 左眼瞳孔直径 (毫米)
 
     @Column
@@ -133,6 +139,22 @@ public class CalibrationData {
 
     public void setGazeZ(Double gazeZ) {
         this.gazeZ = gazeZ;
+    }
+
+    public Double getNormalizedGazeX() {
+        return normalizedGazeX;
+    }
+
+    public void setNormalizedGazeX(Double normalizedGazeX) {
+        this.normalizedGazeX = normalizedGazeX;
+    }
+
+    public Double getNormalizedGazeY() {
+        return normalizedGazeY;
+    }
+
+    public void setNormalizedGazeY(Double normalizedGazeY) {
+        this.normalizedGazeY = normalizedGazeY;
     }
 
     public Double getLeftPupilDiameter() {

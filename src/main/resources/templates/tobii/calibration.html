@@ -124,10 +124,10 @@
                 </div>
 
                 <div th:if="${message}" class="alert alert-success" role="alert">
-                    <th:text="${message}"></th:text>
+                    <span th:text="${message}"></span>
                 </div>
                 <div th:if="${error}" class="alert alert-danger" role="alert">
-                    <th:text="${error}"></th:text>
+                    <span th:text="${error}"></span>
                 </div>
 
                 <div class="mb-4">
@@ -207,6 +207,9 @@
         let calibrationInterval;
         let screenWidth = document.getElementById('calibrationArea').offsetWidth;
         let screenHeight = document.getElementById('calibrationArea').offsetHeight;
+        const csrfHeader = [[${_csrf.headerName}]];
+        const csrfToken = [[${_csrf.token}]];
+        const calibrationStartUrl = [[@{/tobii/calibration/start}]];
 
         // 初始化校准点
         function initCalibrationPoints() {
@@ -284,10 +287,11 @@
             document.getElementById('progressBar').textContent = '100%';
 
             // 提交校准数据
-            fetch('[[@{/tobii/calibration/start}]]', {
+            fetch(calibrationStartUrl, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    [csrfHeader]: csrfToken
                 },
                 body: JSON.stringify({
                     screenWidth: screenWidth,
@@ -296,7 +300,9 @@
             })
             .then(response => response.text())
             .then(html => {
-                document.body.innerHTML = html;
+                document.open();
+                document.write(html);
+                document.close();
             })
             .catch(error => {
                 console.error('校准失败:', error);

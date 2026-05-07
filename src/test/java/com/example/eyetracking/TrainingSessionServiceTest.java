@@ -2,12 +2,13 @@ package com.example.eyetracking;
 
 import com.example.eyetracking.model.TrainingSession;
 import com.example.eyetracking.model.User;
+import com.example.eyetracking.repository.UserRepository;
 import com.example.eyetracking.service.TrainingSessionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import java.time.LocalDateTime;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,17 +17,13 @@ public class TrainingSessionServiceTest {
 
     @Autowired
     private TrainingSessionService trainingSessionService;
+    @Autowired
+    private UserRepository userRepository;
 
     @Test
     public void testCreateTrainingSession() {
         // 创建测试用户
-        User user = new User();
-        user.setId(1L);
-        user.setUsername("testuser");
-        user.setName("Test User");
-        user.setEmail("test@example.com");
-        user.setPassword("password");
-        user.setRole("USER");
+        User user = createTestUser();
 
         // 创建训练会话
         TrainingSession session = trainingSessionService.createTrainingSession(user, "Test Session");
@@ -43,13 +40,7 @@ public class TrainingSessionServiceTest {
     @Test
     public void testEndTrainingSession() {
         // 创建测试用户
-        User user = new User();
-        user.setId(1L);
-        user.setUsername("testuser");
-        user.setName("Test User");
-        user.setEmail("test@example.com");
-        user.setPassword("password");
-        user.setRole("USER");
+        User user = createTestUser();
 
         // 创建训练会话
         TrainingSession session = trainingSessionService.createTrainingSession(user, "Test Session");
@@ -59,7 +50,7 @@ public class TrainingSessionServiceTest {
         try {
             Thread.sleep(1000);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            Thread.currentThread().interrupt();
         }
 
         // 结束训练会话
@@ -76,13 +67,7 @@ public class TrainingSessionServiceTest {
     @Test
     public void testGetTrainingSessionById() {
         // 创建测试用户
-        User user = new User();
-        user.setId(1L);
-        user.setUsername("testuser");
-        user.setName("Test User");
-        user.setEmail("test@example.com");
-        user.setPassword("password");
-        user.setRole("USER");
+        User user = createTestUser();
 
         // 创建训练会话
         TrainingSession session = trainingSessionService.createTrainingSession(user, "Test Session");
@@ -95,5 +80,16 @@ public class TrainingSessionServiceTest {
         assertNotNull(retrievedSession);
         assertEquals(sessionId, retrievedSession.getId());
         assertEquals("Test Session", retrievedSession.getSessionName());
+    }
+
+    private User createTestUser() {
+        String suffix = UUID.randomUUID().toString();
+        User user = new User();
+        user.setUsername("testuser-" + suffix);
+        user.setName("Test User");
+        user.setEmail("test-" + suffix + "@example.com");
+        user.setPassword("password");
+        user.setRole("USER");
+        return userRepository.save(user);
     }
 }

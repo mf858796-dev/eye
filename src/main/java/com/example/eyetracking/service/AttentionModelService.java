@@ -21,6 +21,10 @@ public class AttentionModelService {
 
     // 生成注意力分析报告
     public Report generateAttentionReport(TrainingSession trainingSession) {
+        if (trainingSession == null) {
+            throw new IllegalArgumentException("训练会话不能为空");
+        }
+
         List<GazeData> gazeDataList = gazeDataService.getGazeDataByTrainingSession(trainingSession);
         List<GazeData> processedData = gazeDataService.processGazeData(gazeDataList);
 
@@ -33,10 +37,7 @@ public class AttentionModelService {
         // 计算详细的注意力指标
         AttentionService attentionService = new AttentionService();
         for (GazeData data : processedData) {
-            if (data.getxCoordinate() != null && data.getyCoordinate() != null) {
-                attentionService.addGazePoint(data.getxCoordinate(), data.getyCoordinate(), 
-                    data.getTimestamp() != null ? data.getTimestamp().toLocalTime().toSecondOfDay() * 1000L : System.currentTimeMillis());
-            }
+            attentionService.addGazePoint(data);
         }
 
         AttentionService.AttentionMetrics metrics = attentionService.getMetrics();
@@ -51,7 +52,7 @@ public class AttentionModelService {
         Report report = new Report();
         report.setTrainingSession(trainingSession);
         report.setGeneratedAt(LocalDateTime.now());
-        report.setAttentionScore(String.valueOf(attentionScore));
+        report.setAttentionScore(String.format("%.2f", attentionScore));
         report.setFocusPattern(focusPattern);
         report.setRecommendations(recommendations);
         report.setDetailedAnalysis(detailedAnalysis);
@@ -85,7 +86,7 @@ public class AttentionModelService {
 
         // 统计不同区域的注视次数
         Map<String, Long> areaCountMap = processedData.stream()
-                .collect(Collectors.groupingBy(GazeData::getAreaOfInterest, Collectors.counting()));
+                .collect(Collectors.groupingBy(this::getAreaOfInterest, Collectors.counting()));
 
         // 找出注视次数最多的区域
         String mostFocusedArea = areaCountMap.entrySet().stream()
@@ -149,7 +150,7 @@ public class AttentionModelService {
 
         int totalFixationDuration = processedData.stream()
                 .filter(data -> "FIXATION".equals(data.getFixationType()))
-                .mapToInt(GazeData::getFixationDuration)
+                .mapToInt(data -> data.getFixationDuration() == null ? 0 : data.getFixationDuration())
                 .sum();
 
         double avgFixationDuration = fixationCount > 0 ? (double) totalFixationDuration / fixationCount : 0;
@@ -159,7 +160,7 @@ public class AttentionModelService {
 
         // 分析区域分布
         Map<String, Long> areaCountMap = processedData.stream()
-                .collect(Collectors.groupingBy(GazeData::getAreaOfInterest, Collectors.counting()));
+                .collect(Collectors.groupingBy(this::getAreaOfInterest, Collectors.counting()));
 
         analysis.append("## 区域分布\n");
         areaCountMap.forEach((area, count) -> {
@@ -167,6 +168,13 @@ public class AttentionModelService {
         });
 
         return analysis.toString();
+    }
+
+    private String getAreaOfInterest(GazeData data) {
+        if (data.getAreaOfInterest() == null || data.getAreaOfInterest().trim().isEmpty()) {
+            return "code";
+        }
+        return data.getAreaOfInterest();
     }
 
     // 获取用户的历史注意力数据

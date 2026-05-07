@@ -67,10 +67,10 @@
             </div>
             <div class="card-body">
                 <div th:if="${message}" class="alert alert-success" role="alert">
-                    <th:text="${message}"></th:text>
+                    <span th:text="${message}"></span>
                 </div>
                 <div th:if="${error}" class="alert alert-danger" role="alert">
-                    <th:text="${error}"></th:text>
+                    <span th:text="${error}"></span>
                 </div>
 
                 <div th:if="${calibrationData != null and !calibrationData.isEmpty()}">

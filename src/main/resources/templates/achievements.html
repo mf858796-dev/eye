@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>训练成就 - 眼动仪训练系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<main class="page-shell">
+    <div class="page-head"><div><h1 class="page-title">训练成就</h1><p class="page-copy">完成训练、提高注意力分数或目标行命中率后会自动解锁。</p></div><div class="toolbar"><a th:href="@{/dashboard}" class="btn btn-outline-secondary"><i class="bi bi-grid-1x2"></i> 系统总览</a></div></div>
+    <div th:if="${#lists.isEmpty(achievements)}" class="panel empty-state">暂未解锁成就。</div>
+    <section th:if="${!#lists.isEmpty(achievements)}" class="code-grid">
+        <article class="record-card" th:each="achievement : ${achievements}">
+            <div class="d-flex align-items-start justify-content-between gap-2"><div><h3 th:text="${achievement.badgeName}">成就名称</h3><p class="muted-copy mb-0" th:text="${achievement.description}">成就说明</p></div><span class="soft-badge warning"><i class="bi bi-trophy"></i> 已解锁</span></div>
+            <div class="record-meta"><span class="soft-badge" th:text="${achievement.badgeCode}">BADGE</span></div>
+            <p class="muted-copy mb-0">解锁时间：<span th:text="${achievement.unlockedAt}"></span></p>
+        </article>
+    </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

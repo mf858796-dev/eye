@@ -3,14 +3,10 @@ package com.example.eyetracking.service;
 import com.example.eyetracking.model.GazeData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
-import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@Service
 public class AttentionService {
     private static final Logger logger = LoggerFactory.getLogger(AttentionService.class);
 
@@ -21,6 +17,7 @@ public class AttentionService {
 
     private static final int DEFAULT_WINDOW_SIZE = 50;
     private static final int DEFAULT_FIXATION_THRESHOLD_MS = 200;
+    private static final double FIXATION_RADIUS_PIXELS = 60.0;
 
     public AttentionService() {
         this.gazeHistory = new ArrayList<>();
@@ -54,9 +51,30 @@ public class AttentionService {
         }
     }
 
+    public void addGazePoint(double x, double y, double z, long timestamp) {
+        if (!isValidGazePoint3d(x, y, z)) {
+            return;
+        }
+
+        gazeHistory.add(new GazePoint(x, y, z, timestamp));
+
+        GazePoint cleanedPoint = cleanGazeData(x, y, z, timestamp);
+        if (cleanedPoint != null) {
+            filteredHistory.add(cleanedPoint);
+        }
+    }
+
     public void addGazePoint(GazeData gazeData) {
-        if (gazeData != null) {
-            addGazePoint(gazeData.getX(), gazeData.getY(), System.currentTimeMillis());
+        if (gazeData == null) {
+            return;
+        }
+        long timestamp = gazeData.getTimestamp() == null
+                ? System.currentTimeMillis()
+                : gazeData.getTimestamp().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+        if (hasValidGaze3d(gazeData)) {
+            addGazePoint(gazeData.getGaze3dX(), gazeData.getGaze3dY(), gazeData.getGaze3dZ(), timestamp);
+        } else if (gazeData.getX() != null && gazeData.getY() != null) {
+            addGazePoint(gazeData.getX(), gazeData.getY(), timestamp);
         }
     }
 
@@ -70,9 +88,23 @@ public class AttentionService {
         return true;
     }
 
+    private boolean isValidGazePoint3d(double x, double y, double z) {
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
+            return false;
+        }
+        if (Math.abs(z) < 1.0) {
+            return false;
+        }
+        return Math.abs(x) <= 10000 && Math.abs(y) <= 10000 && Math.abs(z) <= 20000;
+    }
+
     private GazePoint cleanGazeData(double x, double y, long timestamp) {
+        return cleanGazeData(x, y, Double.NaN, timestamp);
+    }
+
+    private GazePoint cleanGazeData(double x, double y, double z, long timestamp) {
         if (filteredHistory.size() < 2) {
-            return new GazePoint(x, y, timestamp);
+            return Double.isNaN(z) ? new GazePoint(x, y, timestamp) : new GazePoint(x, y, z, timestamp);
         }
 
         GazePoint prev = filteredHistory.get(filteredHistory.size() - 1);
@@ -82,15 +114,16 @@ public class AttentionService {
             return null;
         }
 
-        double distance = Math.sqrt(Math.pow(x - prev.x, 2) + Math.pow(y - prev.y, 2));
+        GazePoint current = Double.isNaN(z) ? new GazePoint(x, y, timestamp) : new GazePoint(x, y, z, timestamp);
+        double distance = distanceBetween(current, prev);
         double velocity = distance / dt;
 
         double maxVelocity = 2000;
         if (velocity > maxVelocity) {
-            return new GazePoint(prev.x, prev.y, timestamp);
+            return prev.hasZ ? new GazePoint(prev.x, prev.y, prev.z, timestamp) : new GazePoint(prev.x, prev.y, timestamp);
         }
 
-        return new GazePoint(x, y, timestamp);
+        return current;
     }
 
     public AttentionMetrics getMetrics() {
@@ -186,34 +219,31 @@ public class AttentionService {
     }
 
     private double calcEffectiveFixation() {
-        if (gazeHistory.size() < 2) {
+        if (filteredHistory.size() < 2) {
             return 0.0;
         }
 
-        long totalDuration = gazeHistory.get(gazeHistory.size() - 1).timestamp - gazeHistory.get(0).timestamp;
+        long totalDuration = filteredHistory.get(filteredHistory.size() - 1).timestamp - filteredHistory.get(0).timestamp;
         if (totalDuration <= 0) {
             return 0.0;
         }
 
-        double keyDuration = 0;
-        double avgInterval = totalDuration / (double) gazeHistory.size();
+        double fixationDuration = 0;
+        for (int i = 1; i < filteredHistory.size(); i++) {
+            GazePoint current = filteredHistory.get(i);
+            GazePoint previous = filteredHistory.get(i - 1);
+            long interval = current.timestamp - previous.timestamp;
+            if (interval <= 0) {
+                continue;
+            }
 
-        for (int i = 0; i < gazeHistory.size(); i++) {
-            double x = gazeHistory.get(i).x;
-            double y = gazeHistory.get(i).y;
-
-            for (int j = 0; j < gazeHistory.size(); j++) {
-                if (i != j) {
-                    GazePoint p = gazeHistory.get(j);
-                    if (p.x == x && p.y == y) {
-                        keyDuration += avgInterval;
-                        break;
-                    }
-                }
+            double distance = distanceBetween(current, previous);
+            if (distance <= FIXATION_RADIUS_PIXELS || interval >= fixationThresholdMs) {
+                fixationDuration += interval;
             }
         }
 
-        return Math.min(1.0, keyDuration / totalDuration);
+        return Math.min(1.0, fixationDuration / totalDuration);
     }
 
     private int calcRegressionCount() {
@@ -236,10 +266,7 @@ public class AttentionService {
 
         List<Double> distances = new ArrayList<>();
         for (int i = 1; i < filteredHistory.size(); i++) {
-            double dist = Math.sqrt(
-                Math.pow(filteredHistory.get(i).x - filteredHistory.get(i - 1).x, 2) +
-                Math.pow(filteredHistory.get(i).y - filteredHistory.get(i - 1).y, 2)
-            );
+            double dist = distanceBetween(filteredHistory.get(i), filteredHistory.get(i - 1));
             distances.add(dist);
         }
 
@@ -276,24 +303,40 @@ public class AttentionService {
             return 0.0;
         }
 
-        List<Double> intervals = new ArrayList<>();
+        List<Double> fixationDurations = new ArrayList<>();
+        double currentDuration = 0;
+
         for (int i = 1; i < filteredHistory.size(); i++) {
-            double interval = (filteredHistory.get(i).timestamp - filteredHistory.get(i - 1).timestamp) / 1000.0;
-            if (interval > 0.01) {
-                intervals.add(interval);
+            GazePoint current = filteredHistory.get(i);
+            GazePoint previous = filteredHistory.get(i - 1);
+            double interval = (current.timestamp - previous.timestamp) / 1000.0;
+            if (interval <= 0.01) {
+                continue;
+            }
+
+            double distance = distanceBetween(current, previous);
+            if (distance <= FIXATION_RADIUS_PIXELS) {
+                currentDuration += interval;
+            } else if (currentDuration > 0) {
+                fixationDurations.add(currentDuration);
+                currentDuration = 0;
             }
         }
 
-        if (intervals.isEmpty()) {
+        if (currentDuration > 0) {
+            fixationDurations.add(currentDuration);
+        }
+
+        if (fixationDurations.isEmpty()) {
             return 0.0;
         }
 
         double sum = 0;
-        for (double interval : intervals) {
-            sum += interval;
+        for (double duration : fixationDurations) {
+            sum += duration;
         }
 
-        return sum / intervals.size();
+        return sum / fixationDurations.size();
     }
 
     private double calcSaccadePathLength() {
@@ -303,10 +346,7 @@ public class AttentionService {
 
         double totalLength = 0;
         for (int i = 1; i < filteredHistory.size(); i++) {
-            totalLength += Math.sqrt(
-                Math.pow(filteredHistory.get(i).x - filteredHistory.get(i - 1).x, 2) +
-                Math.pow(filteredHistory.get(i).y - filteredHistory.get(i - 1).y, 2)
-            );
+            totalLength += distanceBetween(filteredHistory.get(i), filteredHistory.get(i - 1));
         }
 
         return totalLength;
@@ -321,14 +361,40 @@ public class AttentionService {
         return quality;
     }
 
+    private boolean hasValidGaze3d(GazeData gazeData) {
+        return gazeData.getGaze3dX() != null
+                && gazeData.getGaze3dY() != null
+                && gazeData.getGaze3dZ() != null
+                && Math.abs(gazeData.getGaze3dZ()) >= 1.0;
+    }
+
+    private double distanceBetween(GazePoint current, GazePoint previous) {
+        double dx = current.x - previous.x;
+        double dy = current.y - previous.y;
+        double dz = current.hasZ && previous.hasZ ? current.z - previous.z : 0.0;
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
     public static class GazePoint {
         public double x;
         public double y;
+        public double z;
+        public boolean hasZ;
         public long timestamp;
 
         public GazePoint(double x, double y, long timestamp) {
             this.x = x;
             this.y = y;
+            this.z = 0.0;
+            this.hasZ = false;
+            this.timestamp = timestamp;
+        }
+
+        public GazePoint(double x, double y, double z, long timestamp) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.hasZ = true;
             this.timestamp = timestamp;
         }
     }

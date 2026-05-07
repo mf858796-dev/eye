@@ -11,12 +11,16 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
+import java.util.regex.Pattern;
 
 @Controller
 @RequestMapping("/user")
 public class UserController {
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+
     @Autowired
     private UserRepository userRepository;
     @Autowired
@@ -29,87 +33,129 @@ public class UserController {
     }
 
     @PostMapping("/register")
-    public String registerSubmit(@ModelAttribute User user, Model model) {
-        // 检查用户名是否已存在
+    public String registerSubmit(@ModelAttribute User user, Model model, RedirectAttributes redirectAttributes) {
+        user.setUsername(clean(user.getUsername()));
+        user.setEmail(clean(user.getEmail()));
+        user.setName(clean(user.getName()));
+
+        String validationError = validateRegistration(user);
+        if (validationError != null) {
+            model.addAttribute("error", validationError);
+            model.addAttribute("user", user);
+            return "user/register";
+        }
+
         if (userRepository.findByUsername(user.getUsername()).isPresent()) {
             model.addAttribute("error", "用户名已存在");
+            model.addAttribute("user", user);
             return "user/register";
         }
 
-        // 检查邮箱是否已存在
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
-            model.addAttribute("error", "邮箱已存在");
+            model.addAttribute("error", "邮箱已被使用");
+            model.addAttribute("user", user);
             return "user/register";
         }
 
-        // 加密密码
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-
-        // 设置默认角色
         user.setRole("USER");
-
-        // 保存用户
         userRepository.save(user);
 
-        model.addAttribute("message", "注册成功");
-        return "user/login";
+        redirectAttributes.addFlashAttribute("message", "注册成功，请登录");
+        return "redirect:/user/login";
     }
 
     @GetMapping("/login")
-    public String login(@RequestParam(value = "error", required = false) String error, Model model) {
+    public String login(@RequestParam(value = "error", required = false) String error,
+                        @RequestParam(value = "logout", required = false) String logout,
+                        Model model) {
         if (error != null) {
             model.addAttribute("error", "用户名或密码错误");
+        }
+        if (logout != null) {
+            model.addAttribute("message", "已安全退出");
         }
         return "user/login";
     }
 
     @GetMapping("/profile")
     public String profile(Model model, Principal principal) {
-        // 从会话中获取当前用户
-        String username = principal.getName();
-        User user = userRepository.findByUsername(username).orElse(new User());
+        if (principal == null) {
+            return "redirect:/user/login";
+        }
+
+        User user = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (user == null) {
+            return "redirect:/user/login";
+        }
         model.addAttribute("user", user);
         return "user/profile";
     }
 
     @PostMapping("/profile/update")
     public String updateProfile(@ModelAttribute User user, Model model, Principal principal) {
-        // 从会话中获取当前用户的用户名
-        String username = principal.getName();
-        User existingUser = userRepository.findByUsername(username).orElse(null);
-        if (existingUser != null) {
-            // 更新用户信息
-            // 检查用户名是否已存在（只有当用户尝试修改用户名时才检查）
-            String newUsername = user.getUsername();
-            if (newUsername != null && !newUsername.isEmpty() && !existingUser.getUsername().equals(newUsername)) {
-                if (userRepository.findByUsername(newUsername).isPresent()) {
-                    model.addAttribute("error", "用户名已存在");
-                    model.addAttribute("user", existingUser);
-                    return "user/profile";
-                }
-                existingUser.setUsername(newUsername);
-            }
-
-            // 检查邮箱是否已存在
-            if (user.getEmail() != null && !existingUser.getEmail().equals(user.getEmail())) {
-                if (userRepository.findByEmail(user.getEmail()).isPresent()) {
-                    model.addAttribute("error", "邮箱已存在");
-                    model.addAttribute("user", existingUser);
-                    return "user/profile";
-                }
-                existingUser.setEmail(user.getEmail());
-            }
-            
-            // 更新姓名
-            if (user.getName() != null && !user.getName().isEmpty()) {
-                existingUser.setName(user.getName());
-            }
-
-            userRepository.save(existingUser);
-            model.addAttribute("message", "个人资料更新成功");
+        if (principal == null) {
+            return "redirect:/user/login";
         }
+
+        User existingUser = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (existingUser == null) {
+            return "redirect:/user/login";
+        }
+
+        String newName = clean(user.getName());
+        String newEmail = clean(user.getEmail());
+
+        if (isBlank(newName) || isBlank(newEmail)) {
+            model.addAttribute("error", "姓名和邮箱不能为空");
+            model.addAttribute("user", existingUser);
+            return "user/profile";
+        }
+        if (!EMAIL_PATTERN.matcher(newEmail).matches()) {
+            model.addAttribute("error", "邮箱格式不正确");
+            model.addAttribute("user", existingUser);
+            return "user/profile";
+        }
+
+        if (!newEmail.equalsIgnoreCase(existingUser.getEmail())
+                && userRepository.findByEmail(newEmail).isPresent()) {
+            model.addAttribute("error", "邮箱已被使用");
+            model.addAttribute("user", existingUser);
+            return "user/profile";
+        }
+
+        existingUser.setName(newName);
+        existingUser.setEmail(newEmail);
+        userRepository.save(existingUser);
+
+        model.addAttribute("message", "个人资料已更新");
         model.addAttribute("user", existingUser);
         return "user/profile";
+    }
+
+    private String validateRegistration(User user) {
+        if (isBlank(user.getUsername()) || isBlank(user.getPassword())
+                || isBlank(user.getName()) || isBlank(user.getEmail())) {
+            return "请完整填写注册信息";
+        }
+        if (user.getUsername().length() < 3 || user.getUsername().length() > 30) {
+            return "用户名长度需要在 3 到 30 个字符之间";
+        }
+        if (user.getPassword().length() < 6) {
+            return "密码至少需要 6 位";
+        }
+        if (!EMAIL_PATTERN.matcher(user.getEmail()).matches()) {
+            return "邮箱格式不正确";
+        }
+        return null;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private String clean(String value) {
+        return value == null ? null : value.trim();
     }
 
     @GetMapping("/logout")

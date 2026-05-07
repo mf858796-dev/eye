@@ -10,6 +10,8 @@ import java.util.List;
 @Service
 public class CoordinateMapperService {
     private static final Logger logger = LoggerFactory.getLogger(CoordinateMapperService.class);
+    private static final double DEFAULT_HORIZONTAL_FOV_DEGREES = 82.0;
+    private static final double DEFAULT_VERTICAL_FOV_DEGREES = 52.0;
 
     private int screenWidth;
     private int screenHeight;
@@ -54,7 +56,11 @@ public class CoordinateMapperService {
         double calibratedU = u;
         double calibratedV = v;
 
-        if (isCalibrated && usePolynomial && polyCoeffsU != null && polyCoeffsV != null) {
+        if (isCalibrated && useHomography && homographyMatrix != null) {
+            double[] mapped = applyHomography(u, v);
+            calibratedU = mapped[0];
+            calibratedV = mapped[1];
+        } else if (isCalibrated && usePolynomial && polyCoeffsU != null && polyCoeffsV != null) {
             calibratedU = evaluatePolynomial(polyCoeffsU, u, v);
             calibratedV = evaluatePolynomial(polyCoeffsV, u, v);
         } else if (isCalibrated) {
@@ -68,13 +74,62 @@ public class CoordinateMapperService {
             calibratedV = smoothed[1];
         }
 
+        calibratedU = clamp(calibratedU, 0.0, 1.0);
+        calibratedV = clamp(calibratedV, 0.0, 1.0);
+
         int screenX = (int) (calibratedU * screenWidth);
         int screenY = (int) (calibratedV * screenHeight);
 
-        screenX = Math.max(0, Math.min(screenWidth, screenX));
-        screenY = Math.max(0, Math.min(screenHeight, screenY));
+        screenX = Math.max(0, Math.min(screenWidth - 1, screenX));
+        screenY = Math.max(0, Math.min(screenHeight - 1, screenY));
 
         return new ScreenCoordinate(screenX, screenY, calibratedU, calibratedV);
+    }
+
+    public ScreenCoordinate processGaze3d(double x, double y, double z) {
+        double[] normalized = projectGaze3dToNormalized(x, y, z);
+        return processGazeData(normalized[0], normalized[1]);
+    }
+
+    public ScreenCoordinate processGaze3d(Double x, Double y, Double z, Double fallbackU, Double fallbackV) {
+        if (isValidGaze3d(x, y, z)) {
+            return processGaze3d(x, y, z);
+        }
+        double u = fallbackU == null ? 0.5 : fallbackU;
+        double v = fallbackV == null ? 0.5 : fallbackV;
+        return processGazeData(u, v);
+    }
+
+    public double[] projectGaze3dToNormalized(double x, double y, double z) {
+        double depth = Math.abs(z);
+        if (!Double.isFinite(depth) || depth < 1.0) {
+            return new double[]{0.5, 0.5};
+        }
+
+        double halfHorizontal = Math.tan(Math.toRadians(DEFAULT_HORIZONTAL_FOV_DEGREES / 2.0));
+        double halfVertical = Math.tan(Math.toRadians(DEFAULT_VERTICAL_FOV_DEGREES / 2.0));
+        double u = 0.5 + (x / depth) / (2.0 * halfHorizontal);
+        double v = 0.5 - (y / depth) / (2.0 * halfVertical);
+
+        return new double[]{clamp(u, 0.0, 1.0), clamp(v, 0.0, 1.0)};
+    }
+
+    public double[] projectGaze3dToNormalized(Double x, Double y, Double z, Double fallbackU, Double fallbackV) {
+        if (isValidGaze3d(x, y, z)) {
+            return projectGaze3dToNormalized(x, y, z);
+        }
+        return new double[]{
+                clamp(fallbackU == null ? 0.5 : fallbackU, 0.0, 1.0),
+                clamp(fallbackV == null ? 0.5 : fallbackV, 0.0, 1.0)
+        };
+    }
+
+    private boolean isValidGaze3d(Double x, Double y, Double z) {
+        return x != null && y != null && z != null
+                && Double.isFinite(x)
+                && Double.isFinite(y)
+                && Double.isFinite(z)
+                && Math.abs(z) >= 1.0;
     }
 
     private double[] applyKalmanFilter(double u, double v) {
@@ -106,6 +161,21 @@ public class CoordinateMapperService {
                coeffs[7] * u * u * v +
                coeffs[8] * u * v * v +
                coeffs[9] * v * v * v;
+    }
+
+    private double[] applyHomography(double u, double v) {
+        double denominator = homographyMatrix[6] * u + homographyMatrix[7] * v + homographyMatrix[8];
+        if (Math.abs(denominator) < 1e-9) {
+            return new double[]{u, v};
+        }
+
+        double mappedU = (homographyMatrix[0] * u + homographyMatrix[1] * v + homographyMatrix[2]) / denominator;
+        double mappedV = (homographyMatrix[3] * u + homographyMatrix[4] * v + homographyMatrix[5]) / denominator;
+        return new double[]{mappedU, mappedV};
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     public void setCalibrationData(double offsetU, double offsetV, double scaleU, double scaleV) {

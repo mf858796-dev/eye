@@ -18,6 +18,12 @@ public class TrainingSession {
     @Column(nullable = false)
     private String sessionName;
 
+    @Column
+    private Long trainingLevelId;
+
+    @Column
+    private String taskType;
+
     @Column(nullable = false)
     private LocalDateTime startTime;
 
@@ -29,6 +35,18 @@ public class TrainingSession {
 
     @Column
     private String status;
+
+    @Column
+    private Double completionRate;
+
+    @Column
+    private Double accuracy;
+
+    @Column
+    private Integer targetHits;
+
+    @Column
+    private Integer targetSamples;
 
     @OneToMany(mappedBy = "trainingSession", cascade = CascadeType.ALL)
     private List<GazeData> gazeDataList;
@@ -61,6 +79,22 @@ public class TrainingSession {
         this.sessionName = sessionName;
     }
 
+    public Long getTrainingLevelId() {
+        return trainingLevelId;
+    }
+
+    public void setTrainingLevelId(Long trainingLevelId) {
+        this.trainingLevelId = trainingLevelId;
+    }
+
+    public String getTaskType() {
+        return taskType;
+    }
+
+    public void setTaskType(String taskType) {
+        this.taskType = taskType;
+    }
+
     public LocalDateTime getStartTime() {
         return startTime;
     }
@@ -91,6 +125,38 @@ public class TrainingSession {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public Double getCompletionRate() {
+        return completionRate;
+    }
+
+    public void setCompletionRate(Double completionRate) {
+        this.completionRate = completionRate;
+    }
+
+    public Double getAccuracy() {
+        return accuracy;
+    }
+
+    public void setAccuracy(Double accuracy) {
+        this.accuracy = accuracy;
+    }
+
+    public Integer getTargetHits() {
+        return targetHits;
+    }
+
+    public void setTargetHits(Integer targetHits) {
+        this.targetHits = targetHits;
+    }
+
+    public Integer getTargetSamples() {
+        return targetSamples;
+    }
+
+    public void setTargetSamples(Integer targetSamples) {
+        this.targetSamples = targetSamples;
     }
 
     public List<GazeData> getGazeDataList() {

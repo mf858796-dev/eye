@@ -26,6 +26,9 @@ public class CalibrationService {
     
     @Autowired
     private TobiiGlassesService tobiiGlassesService;
+
+    @Autowired
+    private CoordinateMapperService coordinateMapperService;
     
     // 校准点配置 (9点校准)
     private static final int[][] CALIBRATION_POINTS = {
@@ -40,6 +43,62 @@ public class CalibrationService {
         {75, 75}    // 右下角
     };
     
+    private void applyGaze3dCalibration(List<CalibrationData> calibrationPoints, int screenWidth, int screenHeight) {
+        if (calibrationPoints == null || calibrationPoints.size() < 2) {
+            return;
+        }
+
+        List<double[]> pairs = new ArrayList<>();
+        for (CalibrationData point : calibrationPoints) {
+            if (point.getGazeX() == null || point.getGazeY() == null || point.getGazeZ() == null
+                    || point.getScreenX() == null || point.getScreenY() == null) {
+                continue;
+            }
+            double[] raw = coordinateMapperService.projectGaze3dToNormalized(
+                    point.getGazeX(),
+                    point.getGazeY(),
+                    point.getGazeZ()
+            );
+            pairs.add(new double[]{
+                    raw[0],
+                    raw[1],
+                    point.getScreenX() / screenWidth,
+                    point.getScreenY() / screenHeight
+            });
+        }
+
+        if (pairs.size() < 2) {
+            return;
+        }
+
+        double[] uFit = fitScaleAndOffset(pairs, 0, 2);
+        double[] vFit = fitScaleAndOffset(pairs, 1, 3);
+        coordinateMapperService.setCalibrationData(uFit[1], vFit[1], uFit[0], vFit[0]);
+    }
+
+    private double[] fitScaleAndOffset(List<double[]> pairs, int sourceIndex, int targetIndex) {
+        double meanSource = 0.0;
+        double meanTarget = 0.0;
+        for (double[] pair : pairs) {
+            meanSource += pair[sourceIndex];
+            meanTarget += pair[targetIndex];
+        }
+        meanSource /= pairs.size();
+        meanTarget /= pairs.size();
+
+        double covariance = 0.0;
+        double variance = 0.0;
+        for (double[] pair : pairs) {
+            double sourceDelta = pair[sourceIndex] - meanSource;
+            covariance += sourceDelta * (pair[targetIndex] - meanTarget);
+            variance += sourceDelta * sourceDelta;
+        }
+
+        double scale = variance < 1e-9 ? 1.0 : covariance / variance;
+        double offset = meanTarget - scale * meanSource;
+        return new double[]{scale, offset};
+    }
+
     /**
      * 开始校准
      */
@@ -68,7 +127,7 @@ public class CalibrationService {
                 
                 if (gazeData != null) {
                     // 计算误差 (简化计算，实际需要更复杂的映射)
-                    double error = calculateError(screenX, screenY, gazeData);
+                    double error = calculateError(screenX, screenY, screenWidth, screenHeight, gazeData);
                     
                     // 创建校准数据记录
                     CalibrationData calibrationData = new CalibrationData();
@@ -91,7 +150,7 @@ public class CalibrationService {
                     totalError += error;
                     successfulPoints++;
                     
-                    logger.info("校准点 {} 成功，误差: {:.2f}px", i+1, error);
+                    logger.info("校准点 {} 成功，误差: {}px", i + 1, String.format("%.2f", error));
                 } else {
                     logger.warn("校准点 {} 数据采集失败", i+1);
                 }
@@ -110,10 +169,13 @@ public class CalibrationService {
         
         // 计算平均误差
         double averageError = successfulPoints > 0 ? totalError / successfulPoints : Double.MAX_VALUE;
-        boolean calibrationSuccessful = averageError < 10.0; // 误差小于10像素视为成功
+        boolean calibrationSuccessful = successfulPoints >= 7 && averageError < Math.max(screenWidth, screenHeight) * 0.08;
+        if (calibrationSuccessful) {
+            applyGaze3dCalibration(calibrationPoints, screenWidth, screenHeight);
+        }
         
-        logger.info("校准完成，平均误差: {:.2f}px, 成功点数: {}/{}", 
-                averageError, successfulPoints, CALIBRATION_POINTS.length);
+        logger.info("校准完成，平均误差: {}px, 成功点数: {}/{}",
+                String.format("%.2f", averageError), successfulPoints, CALIBRATION_POINTS.length);
         
         CalibrationResult result = new CalibrationResult();
         result.setSuccessful(calibrationSuccessful);
@@ -128,11 +190,17 @@ public class CalibrationService {
     /**
      * 计算校准误差
      */
-    private double calculateError(double screenX, double screenY, TobiiGlassesService.GazeDataSample gazeData) {
-        // 简化的误差计算
-        // 实际需要根据屏幕尺寸和眼动数据进行映射
-        double mappedX = gazeData.getX() * 1920; // 假设屏幕宽度1920
-        double mappedY = gazeData.getY() * 1080; // 假设屏幕高度1080
+    private double calculateError(double screenX, double screenY, int screenWidth, int screenHeight,
+                                  TobiiGlassesService.GazeDataSample gazeData) {
+        double[] normalized = coordinateMapperService.projectGaze3dToNormalized(
+                gazeData.getX(),
+                gazeData.getY(),
+                gazeData.getZ(),
+                gazeData.getGaze2dX(),
+                gazeData.getGaze2dY()
+        );
+        double mappedX = normalized[0] * screenWidth;
+        double mappedY = normalized[1] * screenHeight;
         
         // 计算欧几里得距离
         return Math.sqrt(Math.pow(screenX - mappedX, 2) + Math.pow(screenY - mappedY, 2));

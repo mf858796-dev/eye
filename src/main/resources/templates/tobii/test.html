@@ -1,418 +1,53 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>眼动仪测试 - 眼动仪训练系统</title>
+    <title>眼动仪连接 - 眼动仪训练系统</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
-        }
-        .sidebar {
-            background-color: #343a40;
-            color: white;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .sidebar a {
-            color: white;
-            text-decoration: none;
-            display: block;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 4px;
-        }
-        .sidebar a:hover {
-            background-color: #495057;
-        }
-        .content {
-            padding: 20px;
-        }
-        .card {
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .card-header {
-            background-color: #343a40;
-            color: white;
-        }
-        .status-connected { color: #28a745; font-weight: bold; }
-        .status-disconnected { color: #dc3545; font-weight: bold; }
-        .gaze-visualization {
-            width: 100%;
-            height: 300px;
-            background-color: #1e1e1e;
-            border-radius: 8px;
-            position: relative;
-            overflow: hidden;
-        }
-        .gaze-point-test {
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            background-color: rgba(255, 0, 0, 0.7);
-            border: 3px solid rgba(255, 0, 0, 0.9);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            box-shadow: 0 0 20px rgba(255, 0, 0, 0.8);
-            animation: pulse 0.5s ease-in-out infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.2); }
-        }
-        .data-display {
-            font-family: 'Courier New', monospace;
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-        .data-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-            border-bottom: 1px solid #dee2e6;
-        }
-        .data-row:last-child { border-bottom: none; }
-        .data-label-test { font-weight: bold; color: #495057; }
-        .data-value-test { color: #0066cc; }
-        .connection-log {
-            max-height: 200px;
-            overflow-y: auto;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 12px;
-        }
-        .log-entry { margin: 2px 0; }
-        .log-success { color: #28a745; }
-        .log-error { color: #dc3545; }
-        .log-info { color: #17a2b8; }
-        .btn-group-custom {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .refresh-indicator {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 5px;
-            animation: refresh-blink 1s infinite;
-        }
-        @keyframes refresh-blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
-    <div class="container-fluid">
-        <div class="row">
-            <!-- 侧边栏 -->
-            <div class="col-md-3 sidebar">
-                <h3 class="mb-4">眼动仪训练系统</h3>
-                <ul class="list-unstyled">
-                    <li><a th:href="@{/dashboard}">仪表盘</a></li>
-                    <li><a th:href="@{/training/code-examples}">代码示例</a></li>
-                    <li><a th:href="@{/training/list}">训练会话</a></li>
-                    <li><a th:href="@{/tobii/test}">眼动仪测试</a></li>
-                    <li><a th:href="@{/user/profile}">个人资料</a></li>
-                    <li><a th:href="@{/user/logout}">退出登录</a></li>
-                </ul>
-            </div>
-
-            <!-- 主内容区 -->
-            <div class="col-md-9 content">
-                <h2 class="mb-4">Tobii Pro Glasses 3 测试</h2>
-                
-                <!-- 提示信息 -->
-                <div class="alert alert-info mb-4">
-                    <h4 class="alert-heading">测试前准备</h4>
-                    <ul>
-                        <li>✓ Tobii Pro Glasses 3 已开机</li>
-                        <li>✓ 电脑已连接到眼镜的WiFi或通过USB连接</li>
-                        <li>✓ 眼镜已完成校准</li>
-                    </ul>
-                </div>
-                
-                <!-- 错误信息 -->
-                <div th:if="${error != null}" class="alert alert-danger mb-4">
-                    <strong>错误:</strong> <span th:text="${error}"></span>
-                </div>
-                
-                <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span>连接状态</span>
-                        <span th:if="${connected}" class="status-connected">● 已连接</span>
-                        <span th:unless="${connected}" class="status-disconnected">● 未连接</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="btn-group-custom">
-                            <form th:action="@{/tobii/connect}" method="post" class="d-inline">
-                                <button type="submit" th:if="${!connected}" class="btn btn-success">
-                                    连接眼动仪
-                                </button>
-                            </form>
-                            <form th:action="@{/tobii/disconnect}" method="post" class="d-inline">
-                                <button type="submit" th:if="${connected}" class="btn btn-danger">
-                                    断开连接
-                                </button>
-                            </form>
-                            <button id="startGazeStream" th:if="${connected}" class="btn btn-primary">
-                                开始采集
-                            </button>
-                            <button id="stopGazeStream" th:if="${connected}" class="btn btn-warning" style="display: none;">
-                                停止采集
-                            </button>
-                            <button id="refreshDevice" class="btn btn-secondary">
-                                刷新设备
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <div th:if="${deviceInfo != null}" class="card mb-4">
-                    <div class="card-header">
-                        设备信息
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="data-display">
-                                    <div class="data-row">
-                                        <span class="data-label-test">序列号</span>
-                                        <span class="data-value-test" th:text="${deviceInfo.serialNumber}"></span>
-                                    </div>
-                                    <div class="data-row">
-                                        <span class="data-label-test">固件版本</span>
-                                        <span class="data-value-test" th:text="${deviceInfo.firmwareVersion}"></span>
-                                    </div>
-                                    <div class="data-row">
-                                        <span class="data-label-test">电池电量</span>
-                                        <span class="data-value-test"><span th:text="${deviceInfo.batteryLevel}"></span>%</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-8">
-                                <div class="connection-log" id="connectionLog">
-                                    <div class="log-entry log-info">等待连接...</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div th:if="${connected}" class="card mb-4">
-                    <div class="card-header">
-                        眼动数据可视化
-                    </div>
-                    <div class="card-body">
-                        <div class="gaze-visualization" id="gazeVisualization">
-                            <div class="gaze-point-test" id="gazePointTest" style="display: none;"></div>
-                        </div>
-                        <div class="data-display mt-3">
-                            <h6 class="mb-3">实时眼动数据 (3D)</h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="data-row">
-                                        <span class="data-label-test">Gaze3D坐标</span>
-                                        <span class="data-value-test">
-                                            (<span id="testGazeX">0.00</span>, 
-                                             <span id="testGazeY">0.00</span>, 
-                                             <span id="testGazeZ">0.00</span>) mm
-                                        </span>
-                                    </div>
-                                    <div class="data-row">
-                                        <span class="data-label-test">Gaze2D坐标</span>
-                                        <span class="data-value-test">
-                                            (<span id="testGaze2dX">0.00</span>, 
-                                             <span id="testGaze2dY">0.00</span>)
-                                        </span>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="data-row">
-                                        <span class="data-label-test">视线起点</span>
-                                        <span class="data-value-test">
-                                            (<span id="testOriginX">0.00</span>, 
-                                             <span id="testOriginY">0.00</span>, 
-                                             <span id="testOriginZ">0.00</span>) mm
-                                        </span>
-                                    </div>
-                                    <div class="data-row">
-                                        <span class="data-label-test">视线方向</span>
-                                        <span class="data-value-test">
-                                            (<span id="testDirX">0.00</span>, 
-                                             <span id="testDirY">0.00</span>, 
-                                             <span id="testDirZ">0.00</span>)
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row mt-2">
-                                <div class="col-md-6">
-                                    <div class="data-row">
-                                        <span class="data-label-test">左眼瞳孔直径</span>
-                                        <span class="data-value-test"><span id="testLeftPupil">0.00</span> mm</span>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="data-row">
-                                        <span class="data-label-test">右眼瞳孔直径</span>
-                                        <span class="data-value-test"><span id="testRightPupil">0.00</span> mm</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-3">
-                            <button class="btn btn-info" id="getGazeDataBtn">
-                                获取眼动数据样本
-                            </button>
-                            <a th:href="@{/tobii/gaze-data}" class="btn btn-secondary">
-                                查看完整数据
-                            </a>
-                        </div>
-                        <div th:if="${gazeData != null}" class="mt-3">
-                            <div class="alert alert-info">
-                                <h5>最新眼动数据样本</h5>
-                                <p><strong>时间戳:</strong> <span th:text="${gazeData.timestamp}"></span></p>
-                                <p><strong>Gaze3D:</strong> x=<span th:text="${#numbers.formatDecimal(gazeData.x, 1, 4)}"></span>, 
-                                   y=<span th:text="${#numbers.formatDecimal(gazeData.y, 1, 4)}"></span>, 
-                                   z=<span th:text="${#numbers.formatDecimal(gazeData.z, 1, 4)}"></span></p>
-                                <p><strong>旋转:</strong> yaw=<span th:text="${#numbers.formatDecimal(gazeData.yaw, 1, 4)}"></span>, 
-                                   pitch=<span th:text="${#numbers.formatDecimal(gazeData.pitch, 1, 4)}"></span>, 
-                                   roll=<span th:text="${#numbers.formatDecimal(gazeData.roll, 1, 4)}"></span></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div th:if="${streamSuccess != null}" class="card mb-4">
-                    <div class="card-header">
-                        视频流状态
-                    </div>
-                    <div class="card-body">
-                        <div th:if="${streamSuccess}" class="alert alert-success">
-                            <strong>✓ 视频流连接成功</strong>
-                        </div>
-                        <div th:unless="${streamSuccess}" class="alert alert-danger">
-                            <strong>✗ 视频流连接失败</strong>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+<main class="page-shell">
+    <div class="page-head">
+        <div><h1 class="page-title">眼动仪连接</h1><p class="page-copy">连接 gaze3d 眼动仪后，可进行校准、实时采集和训练。</p></div>
+        <div class="toolbar"><a th:href="@{/settings}" class="btn btn-outline-primary"><i class="bi bi-sliders"></i> 连接设置</a><a th:href="@{/dashboard}" class="btn btn-outline-secondary"><i class="bi bi-grid-1x2"></i> 系统总览</a></div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script th:inline="javascript">
-        const glassesAddress = "http://192.168.71.50:8080";
-        let isStreaming = false;
-        let streamInterval = null;
-        
-        function addLogEntry(message, type) {
-            const log = document.getElementById('connectionLog');
-            const entry = document.createElement('div');
-            entry.className = 'log-entry log-' + type;
-            entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
-            log.appendChild(entry);
-            log.scrollTop = log.scrollHeight;
-        }
-        
-        function updateGazePoint(gaze2d) {
-            const viz = document.getElementById('gazeVisualization');
-            const point = document.getElementById('gazePointTest');
-            if (viz && point && gaze2d) {
-                const rect = viz.getBoundingClientRect();
-                const x = gaze2d.x * rect.width;
-                const y = gaze2d.y * rect.height;
-                point.style.display = 'block';
-                point.style.left = x + 'px';
-                point.style.top = y + 'px';
-            }
-        }
-        
-        function updateDataDisplay(data) {
-            if (data.gaze3d) {
-                document.getElementById('testGazeX').textContent = data.gaze3d.x.toFixed(2);
-                document.getElementById('testGazeY').textContent = data.gaze3d.y.toFixed(2);
-                document.getElementById('testGazeZ').textContent = data.gaze3d.z.toFixed(2);
-            }
-            if (data.gaze2d) {
-                document.getElementById('testGaze2dX').textContent = data.gaze2d.x.toFixed(4);
-                document.getElementById('testGaze2dY').textContent = data.gaze2d.y.toFixed(4);
-                updateGazePoint(data.gaze2d);
-            }
-            if (data.eyeleft) {
-                if (data.eyeleft.gazeorigin) {
-                    document.getElementById('testOriginX').textContent = data.eyeleft.gazeorigin.x.toFixed(2);
-                    document.getElementById('testOriginY').textContent = data.eyeleft.gazeorigin.y.toFixed(2);
-                    document.getElementById('testOriginZ').textContent = data.eyeleft.gazeorigin.z.toFixed(2);
-                }
-                if (data.eyeleft.gazedirection) {
-                    document.getElementById('testDirX').textContent = data.eyeleft.gazedirection.x.toFixed(3);
-                    document.getElementById('testDirY').textContent = data.eyeleft.gazedirection.y.toFixed(3);
-                    document.getElementById('testDirZ').textContent = data.eyeleft.gazedirection.z.toFixed(3);
-                }
-                if (data.eyeleft.pupildiameter) {
-                    document.getElementById('testLeftPupil').textContent = data.eyeleft.pupildiameter.toFixed(2);
-                }
-            }
-            if (data.eyeright && data.eyeright.pupildiameter) {
-                document.getElementById('testRightPupil').textContent = data.eyeright.pupildiameter.toFixed(2);
-            }
-        }
-        
-        function fetchGazeData() {
-            fetch(glassesAddress + '/api/gaze')
-                .then(response => response.json())
-                .then(data => {
-                    addLogEntry('获取到眼动数据', 'success');
-                    updateDataDisplay(data);
-                })
-                .catch(error => {
-                    addLogEntry('获取数据失败: ' + error.message, 'error');
-                });
-        }
-        
-        function startStreaming() {
-            isStreaming = true;
-            document.getElementById('startGazeStream').style.display = 'none';
-            document.getElementById('stopGazeStream').style.display = 'inline-block';
-            addLogEntry('开始眼动数据采集', 'info');
-            streamInterval = setInterval(fetchGazeData, 100);
-        }
-        
-        function stopStreaming() {
-            isStreaming = false;
-            document.getElementById('startGazeStream').style.display = 'inline-block';
-            document.getElementById('stopGazeStream').style.display = 'none';
-            addLogEntry('停止眼动数据采集', 'info');
-            if (streamInterval) {
-                clearInterval(streamInterval);
-                streamInterval = null;
-            }
-        }
-        
-        document.getElementById('startGazeStream')?.addEventListener('click', startStreaming);
-        document.getElementById('stopGazeStream')?.addEventListener('click', stopStreaming);
-        document.getElementById('getGazeDataBtn')?.addEventListener('click', fetchGazeData);
-        
-        document.getElementById('refreshDevice')?.addEventListener('click', function() {
-            addLogEntry('刷新设备信息...', 'info');
-            window.location.reload();
-        });
-        
-        if ([[${connected}]]) {
-            addLogEntry('设备已连接', 'success');
-            addLogEntry('眼镜地址: ' + glassesAddress, 'info');
-        }
-    </script>
+    <div th:if="${error != null}" class="alert alert-danger"><span th:text="${error}"></span></div>
+    <section class="content-grid mb-3">
+        <div class="panel status-card">
+            <div><p class="section-label">连接状态</p><span th:if="${connected}" class="status-pill connected"><i class="bi bi-check-circle-fill"></i>已连接</span><span th:unless="${connected}" class="status-pill disconnected"><i class="bi bi-exclamation-circle-fill"></i>未连接</span><p class="muted-copy mt-2 mb-0">当前地址：<strong th:text="${glassesAddress}">http://192.168.71.50</strong></p></div>
+            <div class="d-flex flex-column gap-2"><form th:action="@{/tobii/connect}" method="post" th:if="${!connected}"><input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"><button type="submit" class="btn btn-primary btn-sm">连接</button></form><form th:action="@{/tobii/disconnect}" method="post" th:if="${connected}"><input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"><button type="submit" class="btn btn-outline-danger btn-sm">断开</button></form><button id="refreshDevice" class="btn btn-outline-secondary btn-sm">刷新</button></div>
+        </div>
+        <div class="panel">
+            <p class="section-label">后续操作</p>
+            <div th:if="${connected}" class="toolbar justify-content-start"><a th:href="@{/tobii/calibration}" class="btn btn-primary"><i class="bi bi-bullseye"></i> 眼动仪校准</a><a th:href="@{/tobii/calibration/history}" class="btn btn-outline-primary"><i class="bi bi-clipboard2-data"></i> 校准历史</a><button id="startGazeStream" class="btn btn-outline-primary"><i class="bi bi-record-circle"></i> 开始采集</button><button id="stopGazeStream" class="btn btn-outline-warning" style="display:none;">停止采集</button></div>
+            <p th:unless="${connected}" class="muted-copy mb-0">连接成功后将显示校准、校准历史和实时采集入口。</p>
+        </div>
+    </section>
+    <section th:if="${deviceInfo != null}" class="panel mb-3">
+        <div class="row g-3"><div class="col-lg-5"><p class="section-label">设备信息</p><div class="data-display"><div class="data-row"><span class="data-label-test">序列号</span><span class="data-value-test" th:text="${deviceInfo.serialNumber}"></span></div><div class="data-row"><span class="data-label-test">固件版本</span><span class="data-value-test" th:text="${deviceInfo.firmwareVersion}"></span></div><div class="data-row"><span class="data-label-test">电池电量</span><span class="data-value-test"><span th:text="${deviceInfo.batteryLevel}"></span>%</span></div></div></div><div class="col-lg-7"><p class="section-label">连接日志</p><div class="connection-log" id="connectionLog"><div class="log-entry log-info">等待连接...</div></div></div></div>
+    </section>
+    <section th:if="${connected}" class="panel mb-3">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><p class="section-label">实时眼动数据</p><h2 class="panel-title mb-0">gaze3d 采集预览</h2></div><button class="btn btn-outline-primary btn-sm" id="getGazeDataBtn">获取样本</button></div>
+        <div class="gaze-visualization" id="gazeVisualization"><div class="gaze-point-test" id="gazePointTest" style="display:none;"></div></div>
+        <div class="data-display mt-3"><div class="row g-3"><div class="col-lg-6"><div class="data-row"><span class="data-label-test">Gaze3D 坐标</span><span class="data-value-test">(<span id="testGazeX">0.00</span>, <span id="testGazeY">0.00</span>, <span id="testGazeZ">0.00</span>) mm</span></div><div class="data-row"><span class="data-label-test">Gaze2D 坐标</span><span class="data-value-test">(<span id="testGaze2dX">0.00</span>, <span id="testGaze2dY">0.00</span>)</span></div><div class="data-row"><span class="data-label-test">左眼瞳孔</span><span class="data-value-test"><span id="testLeftPupil">0.00</span> mm</span></div></div><div class="col-lg-6"><div class="data-row"><span class="data-label-test">视线起点</span><span class="data-value-test">(<span id="testOriginX">0.00</span>, <span id="testOriginY">0.00</span>, <span id="testOriginZ">0.00</span>) mm</span></div><div class="data-row"><span class="data-label-test">视线方向</span><span class="data-value-test">(<span id="testDirX">0.00</span>, <span id="testDirY">0.00</span>, <span id="testDirZ">0.00</span>)</span></div><div class="data-row"><span class="data-label-test">右眼瞳孔</span><span class="data-value-test"><span id="testRightPupil">0.00</span> mm</span></div></div></div></div>
+    </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script th:inline="javascript">
+const glassesAddress=[[${glassesAddress}]],apiGazeUrl=[[@{/tobii/api/gaze}]];let streamInterval=null;
+function addLogEntry(message,type){const log=document.getElementById('connectionLog');if(!log)return;const entry=document.createElement('div');entry.className='log-entry log-'+type;entry.textContent=new Date().toLocaleTimeString()+' - '+message;log.appendChild(entry);log.scrollTop=log.scrollHeight;}
+function numberOr(value,fallback){const n=Number(value);return Number.isFinite(n)?n:fallback;}
+function toVector(value,fallback){if(Array.isArray(value))return{x:numberOr(value[0],fallback.x),y:numberOr(value[1],fallback.y),z:numberOr(value[2],fallback.z||0)};if(value&&typeof value==='object')return{x:numberOr(value.x,fallback.x),y:numberOr(value.y,fallback.y),z:numberOr(value.z,fallback.z||0)};return fallback;}
+function setText(id,value,digits){const el=document.getElementById(id);if(el)el.textContent=numberOr(value,0).toFixed(digits);}
+function updateGazePoint(gaze2d){const viz=document.getElementById('gazeVisualization'),point=document.getElementById('gazePointTest');if(viz&&point&&gaze2d){const rect=viz.getBoundingClientRect();point.style.display='block';point.style.left=(gaze2d.x*rect.width)+'px';point.style.top=(gaze2d.y*rect.height)+'px';}}
+function updateDataDisplay(data){const payload=data.data||data;if(data.gaze3d)payload.gaze3d=data.gaze3d;if(payload.gaze3d){const g=toVector(payload.gaze3d,{x:0,y:0,z:0});setText('testGazeX',g.x,2);setText('testGazeY',g.y,2);setText('testGazeZ',g.z,2);}if(payload.gaze2d){const g2=toVector(payload.gaze2d,{x:.5,y:.5});setText('testGaze2dX',g2.x,4);setText('testGaze2dY',g2.y,4);updateGazePoint(g2);}if(payload.eyeleft){if(payload.eyeleft.gazeorigin){const o=toVector(payload.eyeleft.gazeorigin,{x:0,y:0,z:0});setText('testOriginX',o.x,2);setText('testOriginY',o.y,2);setText('testOriginZ',o.z,2);}if(payload.eyeleft.gazedirection){const d=toVector(payload.eyeleft.gazedirection,{x:0,y:0,z:-1});setText('testDirX',d.x,3);setText('testDirY',d.y,3);setText('testDirZ',d.z,3);}setText('testLeftPupil',payload.eyeleft.pupildiameter,2);}if(payload.eyeright)setText('testRightPupil',payload.eyeright.pupildiameter,2);}
+function fetchGazeData(){fetch(apiGazeUrl).then(r=>r.json()).then(data=>{if(data.connected===false||data.error)throw new Error(data.error||'眼动仪未连接');addLogEntry('获取到眼动数据','success');updateDataDisplay(data);}).catch(error=>addLogEntry('获取数据失败: '+error.message,'error'));}
+function startStreaming(){document.getElementById('startGazeStream').style.display='none';document.getElementById('stopGazeStream').style.display='inline-block';addLogEntry('开始眼动数据采集','info');streamInterval=setInterval(fetchGazeData,100);}
+function stopStreaming(){document.getElementById('startGazeStream').style.display='inline-block';document.getElementById('stopGazeStream').style.display='none';addLogEntry('停止眼动数据采集','info');if(streamInterval)clearInterval(streamInterval);}
+document.getElementById('startGazeStream')?.addEventListener('click',startStreaming);document.getElementById('stopGazeStream')?.addEventListener('click',stopStreaming);document.getElementById('getGazeDataBtn')?.addEventListener('click',fetchGazeData);document.getElementById('refreshDevice')?.addEventListener('click',()=>window.location.reload());if([[${connected}]]){addLogEntry('设备已连接','success');addLogEntry('眼镜地址: '+glassesAddress,'info');}
+</script>
 </body>
 </html>
