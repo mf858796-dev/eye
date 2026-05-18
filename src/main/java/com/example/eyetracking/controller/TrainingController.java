@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,6 +51,7 @@ public class TrainingController {
     private static final Logger logger = LoggerFactory.getLogger(TrainingController.class);
     private static final int DEFAULT_SCREEN_WIDTH = 1920;
     private static final int DEFAULT_SCREEN_HEIGHT = 1080;
+    private static final int MIN_READ_LINE_FOCUS_MS = 500;
 
     @Autowired
     private CodeRepositoryService codeRepositoryService;
@@ -110,13 +112,13 @@ public class TrainingController {
                 model.addAttribute("error", "请先登录");
                 return "redirect:/user/login";
             }
-            
+
             User user = getCurrentUser(principal);
             if (user == null) {
                 model.addAttribute("error", "请先登录");
                 return "redirect:/user/login";
             }
-            
+
             // 创建训练会话
             TrainingSession session = trainingSessionService.createTrainingSession(
                     user,
@@ -173,7 +175,12 @@ public class TrainingController {
 
     // 提交眼动数据
     @PostMapping("/submit-gaze-data")
-    public String submitGazeData(@RequestParam Long sessionId, @RequestParam String gazeDataJson, Model model, Principal principal) {
+    public String submitGazeData(@RequestParam Long sessionId,
+                                 @RequestParam String gazeDataJson,
+                                 @RequestParam(defaultValue = "real") String dataMode,
+                                 Model model,
+                                 Principal principal,
+                                 RedirectAttributes redirectAttributes) {
         try {
             User currentUser = getCurrentUser(principal);
             if (currentUser == null) {
@@ -206,11 +213,17 @@ public class TrainingController {
             // 解析JSON格式的眼动数据
             List<Map<String, Object>> gazeDataList;
             try {
-                gazeDataList = objectMapper.readValue(gazeDataJson, 
+                gazeDataList = objectMapper.readValue(gazeDataJson,
                     new TypeReference<List<Map<String, Object>>>() {});
             } catch (Exception e) {
                 model.addAttribute("error", "眼动数据格式错误: " + e.getMessage());
                 return "redirect:/training/code-examples";
+            }
+
+            boolean simulationSubmission = "simulation".equalsIgnoreCase(dataMode);
+            if (gazeDataList.isEmpty() && !simulationSubmission) {
+                redirectAttributes.addFlashAttribute("error", "本次没有采集到有效眼动数据，请重新连接设备后继续训练，或明确切换到模拟模式。");
+                return "redirect:/training/resume/" + sessionId;
             }
 
             List<GazeData> records = gazeDataList.isEmpty()
@@ -503,8 +516,9 @@ public class TrainingController {
         }
 
         Set<Integer> targetLines = new LinkedHashSet<>();
+        CodeRepositoryService.CodeExample codeExample = null;
         if (session.getTrainingLevelId() != null) {
-            CodeRepositoryService.CodeExample codeExample = codeRepositoryService.getCodeExampleById(session.getTrainingLevelId());
+            codeExample = codeRepositoryService.getCodeExampleById(session.getTrainingLevelId());
             if (codeExample != null) {
                 targetLines.addAll(parseTargetLines(codeExample.getTargetLines()));
             }
@@ -512,7 +526,6 @@ public class TrainingController {
 
         int targetSamples = 0;
         int targetHits = 0;
-        Set<Integer> completedTargetLines = new LinkedHashSet<>();
         for (GazeData record : records) {
             if (record.getLineNumber() == null) {
                 continue;
@@ -520,19 +533,72 @@ public class TrainingController {
             targetSamples++;
             if (Boolean.TRUE.equals(record.getTargetMatched())) {
                 targetHits++;
-                completedTargetLines.add(record.getLineNumber());
             }
         }
 
         double accuracy = targetSamples == 0 ? 0.0 : targetHits * 100.0 / targetSamples;
-        double completionRate;
-        if (targetLines.isEmpty()) {
-            completionRate = records.isEmpty() ? 0.0 : 100.0;
-        } else {
-            completedTargetLines.retainAll(targetLines);
-            completionRate = completedTargetLines.size() * 100.0 / targetLines.size();
-        }
+        double completionRate = calculateSequentialReadingCompletion(
+                records,
+                codeExample == null ? null : codeExample.getCode()
+        );
         trainingSessionService.updateTrainingResult(session.getId(), completionRate, accuracy, targetHits, targetSamples);
+    }
+
+    private double calculateSequentialReadingCompletion(List<GazeData> records, String code) {
+        List<Integer> readableLines = readableLineNumbers(code, records);
+        if (readableLines.isEmpty()) {
+            return 0.0;
+        }
+
+        Map<Integer, Integer> focusMsByLine = new HashMap<>();
+        int nextLineIndex = 0;
+        List<GazeData> orderedRecords = records.stream()
+                .sorted(Comparator.comparing(GazeData::getTimestamp, Comparator.nullsLast(LocalDateTime::compareTo)))
+                .collect(Collectors.toList());
+
+        for (GazeData record : orderedRecords) {
+            if (nextLineIndex >= readableLines.size()) {
+                break;
+            }
+            Integer lineNumber = record.getLineNumber();
+            Integer expectedLine = readableLines.get(nextLineIndex);
+            if (lineNumber == null || !lineNumber.equals(expectedLine)) {
+                continue;
+            }
+
+            int fixationDuration = record.getFixationDuration() == null
+                    ? 100
+                    : Math.max(0, record.getFixationDuration());
+            int accumulated = focusMsByLine.getOrDefault(lineNumber, 0) + fixationDuration;
+            focusMsByLine.put(lineNumber, accumulated);
+            if (accumulated >= MIN_READ_LINE_FOCUS_MS) {
+                nextLineIndex++;
+            }
+        }
+
+        return nextLineIndex * 100.0 / readableLines.size();
+    }
+
+    private List<Integer> readableLineNumbers(String code, List<GazeData> records) {
+        List<Integer> readableLines = new ArrayList<>();
+        if (code != null && !code.isEmpty()) {
+            String[] lines = code.split("\\r?\\n", -1);
+            for (int i = 0; i < lines.length; i++) {
+                if (!lines[i].trim().isEmpty()) {
+                    readableLines.add(i + 1);
+                }
+            }
+        }
+        if (!readableLines.isEmpty()) {
+            return readableLines;
+        }
+
+        return records.stream()
+                .map(GazeData::getLineNumber)
+                .filter(lineNumber -> lineNumber != null && lineNumber > 0)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
     }
 
     private void addReportMetrics(Model model, Report report) {
@@ -555,6 +621,7 @@ public class TrainingController {
     private void addReportVisualizationData(Model model, TrainingSession session) {
         List<Map<String, Object>> gazePoints = new ArrayList<>();
         Map<Integer, Integer> lineFixationCounts = new LinkedHashMap<>();
+        Map<Integer, Integer> lineFixationDurations = new LinkedHashMap<>();
         List<GazeData> gazeDataList = gazeDataService.getGazeDataByTrainingSession(session).stream()
                 .filter(data -> data.getxCoordinate() != null && data.getyCoordinate() != null)
                 .sorted(Comparator.comparing(GazeData::getTimestamp, Comparator.nullsLast(Comparator.naturalOrder())))
@@ -574,9 +641,15 @@ public class TrainingController {
             gazePoints.add(point);
             if (data.getLineNumber() != null) {
                 lineFixationCounts.merge(data.getLineNumber(), 1, Integer::sum);
+                lineFixationDurations.merge(
+                        data.getLineNumber(),
+                        data.getFixationDuration() == null ? 0 : data.getFixationDuration(),
+                        Integer::sum
+                );
             }
         }
 
+        ReadingPathMetrics readingPathMetrics = calculateReadingPathMetrics(session, gazeDataList);
         model.addAttribute("gazePoints", gazePoints);
         model.addAttribute("gazePointCount", gazePoints.size());
         model.addAttribute("lineFixationCounts", lineFixationCounts.entrySet().stream()
@@ -585,11 +658,69 @@ public class TrainingController {
                     Map<String, Object> item = new HashMap<>();
                     item.put("line", entry.getKey());
                     item.put("count", entry.getValue());
+                    int durationMs = lineFixationDurations.getOrDefault(entry.getKey(), 0);
+                    item.put("durationMs", durationMs);
+                    item.put("averageDurationMs", entry.getValue() == 0 ? 0 : Math.round(durationMs * 1.0 / entry.getValue()));
                     return item;
                 })
                 .collect(Collectors.toList()));
         model.addAttribute("targetAccuracyDisplay", session.getAccuracy() == null ? "0.0" : String.format("%.1f", session.getAccuracy()));
         model.addAttribute("completionRateDisplay", session.getCompletionRate() == null ? "0.0" : String.format("%.1f", session.getCompletionRate()));
+        model.addAttribute("lineCoverageDisplay", String.format("%.1f", readingPathMetrics.lineCoverageRate));
+        model.addAttribute("lineRegressionRateDisplay", String.format("%.1f", readingPathMetrics.regressionRate));
+        model.addAttribute("outsideCodeRateDisplay", String.format("%.1f", readingPathMetrics.outsideCodeRate));
+        model.addAttribute("averageLineFixationDisplay", String.format("%.0f", readingPathMetrics.averageLineFixationMs));
+    }
+
+    private ReadingPathMetrics calculateReadingPathMetrics(TrainingSession session, List<GazeData> records) {
+        ReadingPathMetrics metrics = new ReadingPathMetrics();
+        if (records == null || records.isEmpty()) {
+            return metrics;
+        }
+
+        String code = null;
+        if (session.getTrainingLevelId() != null) {
+            CodeRepositoryService.CodeExample codeExample = codeRepositoryService.getCodeExampleById(session.getTrainingLevelId());
+            code = codeExample == null ? null : codeExample.getCode();
+        }
+        List<Integer> readableLines = readableLineNumbers(code, records);
+        Set<Integer> readableLineSet = new LinkedHashSet<>(readableLines);
+        Set<Integer> observedLines = new LinkedHashSet<>();
+
+        int outsideCount = 0;
+        int lineFixationCount = 0;
+        int totalLineFixationMs = 0;
+        int transitions = 0;
+        int regressions = 0;
+        Integer previousLine = null;
+
+        for (GazeData record : records) {
+            Integer lineNumber = record.getLineNumber();
+            int fixationDuration = record.getFixationDuration() == null ? 100 : Math.max(0, record.getFixationDuration());
+            if (lineNumber == null || lineNumber <= 0) {
+                outsideCount++;
+                continue;
+            }
+            observedLines.add(lineNumber);
+            lineFixationCount++;
+            totalLineFixationMs += fixationDuration;
+
+            if (previousLine != null && !previousLine.equals(lineNumber)) {
+                transitions++;
+                if (lineNumber < previousLine) {
+                    regressions++;
+                }
+            }
+            previousLine = lineNumber;
+        }
+
+        metrics.lineCoverageRate = readableLines.isEmpty()
+                ? 0.0
+                : observedLines.stream().filter(readableLineSet::contains).count() * 100.0 / readableLines.size();
+        metrics.regressionRate = transitions == 0 ? 0.0 : regressions * 100.0 / transitions;
+        metrics.outsideCodeRate = records.isEmpty() ? 0.0 : outsideCount * 100.0 / records.size();
+        metrics.averageLineFixationMs = lineFixationCount == 0 ? 0.0 : totalLineFixationMs * 1.0 / lineFixationCount;
+        return metrics;
     }
 
     private void addTrainingSettings(Model model, AppSettingsService.UserSettings settings) {
@@ -829,5 +960,12 @@ public class TrainingController {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&apos;");
+    }
+
+    private static class ReadingPathMetrics {
+        private double lineCoverageRate;
+        private double regressionRate;
+        private double outsideCodeRate;
+        private double averageLineFixationMs;
     }
 }

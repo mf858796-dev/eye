@@ -18,7 +18,7 @@
     <section class="metric-grid mb-3">
         <div class="metric-card"><p class="metric-label">注意力分数</p><p class="metric-value"><span th:text="${report.attentionScore}">0</span><span class="metric-unit">分</span></p><span th:class="${scoreBadgeClass}" th:text="${scoreLevel}">良好</span></div>
         <div class="metric-card"><p class="metric-label">目标命中率</p><p class="metric-value"><span th:text="${targetAccuracyDisplay}">0</span><span class="metric-unit">%</span></p></div>
-        <div class="metric-card"><p class="metric-label">目标完成度</p><p class="metric-value"><span th:text="${completionRateDisplay}">0</span><span class="metric-unit">%</span></p></div>
+        <div class="metric-card"><p class="metric-label">阅读完成度</p><p class="metric-value"><span th:text="${completionRateDisplay}">0</span><span class="metric-unit">%</span></p></div>
         <div class="metric-card"><p class="metric-label">采样点</p><p class="metric-value"><span th:text="${gazePointCount}">0</span><span class="metric-unit">个</span></p></div>
     </section>
     <div class="content-grid mb-3">
@@ -36,9 +36,17 @@
         <section class="panel"><p class="section-label">详细分析</p><pre class="code-preview" th:text="${report.detailedAnalysis}"></pre></section>
     </div>
     <section class="panel mb-3">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><p class="section-label">代码阅读路径</p><h2 class="panel-title mb-0">从上到下阅读评估</h2></div><span class="soft-badge" th:text="|平均行注视 ${averageLineFixationDisplay}ms|">平均行注视 0ms</span></div>
+        <div class="row g-3">
+            <div class="col-md-4"><div class="data-row"><span class="data-label-test">代码行覆盖率</span><span class="data-value-test" th:text="|${lineCoverageDisplay}%|">0%</span></div></div>
+            <div class="col-md-4"><div class="data-row"><span class="data-label-test">回视比例</span><span class="data-value-test" th:text="|${lineRegressionRateDisplay}%|">0%</span></div></div>
+            <div class="col-md-4"><div class="data-row"><span class="data-label-test">离开代码区域</span><span class="data-value-test" th:text="|${outsideCodeRateDisplay}%|">0%</span></div></div>
+        </div>
+    </section>
+    <section class="panel mb-3">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><p class="section-label">代码行注视统计</p><h2 class="panel-title mb-0">行级采样</h2></div><span class="soft-badge" th:text="'目标命中 ' + (trainingSession.targetHits != null ? trainingSession.targetHits : 0) + '/' + (trainingSession.targetSamples != null ? trainingSession.targetSamples : 0)">目标命中 0/0</span></div>
         <div th:if="${#lists.isEmpty(lineFixationCounts)}" class="empty-state">暂无代码行注视数据</div>
-        <div th:if="${!#lists.isEmpty(lineFixationCounts)}" class="table-responsive"><table class="table table-hover"><thead><tr><th>代码行</th><th>注视采样数</th></tr></thead><tbody><tr th:each="item : ${lineFixationCounts}"><td th:text="${item.line}">1</td><td th:text="${item.count}">0</td></tr></tbody></table></div>
+        <div th:if="${!#lists.isEmpty(lineFixationCounts)}" class="table-responsive"><table class="table table-hover"><thead><tr><th>代码行</th><th>注视采样数</th><th>总注视时长</th><th>平均时长</th></tr></thead><tbody><tr th:each="item : ${lineFixationCounts}"><td th:text="${item.line}">1</td><td th:text="${item.count}">0</td><td th:text="|${item.durationMs}ms|">0ms</td><td th:text="|${item.averageDurationMs}ms|">0ms</td></tr></tbody></table></div>
     </section>
     <section class="panel">
         <p class="section-label">训练信息</p>

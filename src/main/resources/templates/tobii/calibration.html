@@ -1,341 +1,427 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>眼动仪校准 - 眼动仪训练系统</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" th:href="@{/css/app.css}">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .card {
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        .card-header {
-            background-color: #343a40;
-            color: white;
-        }
-        .btn-primary {
-            background-color: #343a40;
-            border-color: #343a40;
-        }
-        .btn-primary:hover {
-            background-color: #495057;
-            border-color: #495057;
-        }
         .calibration-area {
             position: relative;
             width: 100%;
-            height: 600px;
-            background-color: #000;
-            border-radius: 8px;
+            height: min(62vh, 620px);
+            min-height: 420px;
             overflow: hidden;
-            margin: 20px 0;
+            border: 1px solid #1f2933;
+            border-radius: 8px;
+            background:
+                linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),
+                #0f1720;
+            background-size: 34px 34px;
         }
+
         .calibration-point {
             position: absolute;
-            width: 20px;
-            height: 20px;
-            background-color: #ff0;
-            border: 2px solid #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border: 2px solid #ffffff;
             border-radius: 50%;
+            color: transparent;
+            background: #ffc107;
+            box-shadow: 0 0 0 rgba(255, 193, 7, 0);
             transform: translate(-50%, -50%);
-            cursor: pointer;
-            transition: all 0.3s ease;
+            transition: width 0.2s ease, height 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
         }
+
         .calibration-point.active {
-            width: 30px;
-            height: 30px;
-            background-color: #f00;
-            box-shadow: 0 0 20px rgba(255, 0, 0, 0.8);
-            animation: pulse 1s ease-in-out infinite;
+            width: 34px;
+            height: 34px;
+            background: #ff3b30;
+            box-shadow: 0 0 28px rgba(255, 59, 48, 0.76);
+            animation: calibrationPulse 1s ease-in-out infinite;
         }
+
+        .calibration-point.sampling {
+            background: #2f80ed;
+            box-shadow: 0 0 30px rgba(47, 128, 237, 0.8);
+        }
+
         .calibration-point.completed {
-            background-color: #0f0;
+            background: #24a148;
         }
-        @keyframes pulse {
+
+        .calibration-point.failed {
+            background: #8a94a6;
+        }
+
+        .calibration-point.active.failed {
+            box-shadow: 0 0 24px rgba(138, 148, 166, 0.7);
+        }
+
+        @keyframes calibrationPulse {
             0%, 100% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.2); }
+            50% { transform: translate(-50%, -50%) scale(1.18); }
         }
-        .progress-bar {
-            height: 25px;
-            font-size: 14px;
-            font-weight: bold;
+
+        .calibration-tips {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+            padding: 0;
+            margin: 0;
+            list-style: none;
         }
-        .status-message {
-            font-size: 18px;
-            font-weight: bold;
-            margin: 10px 0;
+
+        .calibration-tips li {
+            padding: 12px;
+            border: 1px solid var(--app-line);
+            border-radius: 8px;
+            background: var(--app-surface-soft);
+            color: var(--app-muted);
+            font-size: 13px;
+            line-height: 1.55;
         }
-        .instructions {
-            background-color: #e7f3ff;
-            border-left: 4px solid #2196F3;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .result-card {
-            margin-top: 20px;
-        }
-        .error-indicator {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            margin-right: 5px;
-        }
-        .error-low {
-            background-color: #4CAF50;
-        }
-        .error-medium {
-            background-color: #FFC107;
-        }
-        .error-high {
-            background-color: #F44336;
+
+        @media (max-width: 900px) {
+            .calibration-tips {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h3>眼动仪校准</h3>
-                <a th:href="@{/dashboard}" class="btn btn-secondary">返回仪表盘</a>
-            </div>
-            <div class="card-body">
-                <div class="instructions">
-                    <h4>校准说明</h4>
-                    <ol>
-                        <li>请确保眼动仪已正确佩戴</li>
-                        <li>保持坐姿端正，距离屏幕约60-80厘米</li>
-                        <li>跟随屏幕上的校准点，保持注视直到点消失</li>
-                        <li>校准过程中请不要移动头部</li>
-                        <li>校准完成后会显示校准结果</li>
-                    </ol>
-                </div>
-
-                <div th:if="${message}" class="alert alert-success" role="alert">
-                    <span th:text="${message}"></span>
-                </div>
-                <div th:if="${error}" class="alert alert-danger" role="alert">
-                    <span th:text="${error}"></span>
-                </div>
-
-                <div class="mb-4">
-                    <h5>校准状态</h5>
-                    <div class="status-message" id="statusMessage">准备开始校准</div>
-                    <div class="progress mt-3">
-                        <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-                    </div>
-                </div>
-
-                <div class="calibration-area" id="calibrationArea">
-                    <!-- 校准点会通过JavaScript动态添加 -->
-                </div>
-
-                <div class="text-center mt-4">
-                    <button id="startCalibration" class="btn btn-primary btn-lg" th:disabled="${!connected}">
-                        <span th:if="${!connected}">请先连接眼动仪</span>
-                        <span th:else>开始校准</span>
-                    </button>
-                    <button id="stopCalibration" class="btn btn-danger btn-lg ml-3" disabled>停止校准</button>
-                </div>
-
-                <!-- 校准结果 -->
-                <div th:if="${calibrationResult}" class="result-card card">
-                    <div class="card-header">
-                        <h4>校准结果</h4>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h5>校准状态</h5>
-                                <span th:class="${calibrationResult.successful ? 'badge bg-success' : 'badge bg-danger'}" th:text="${calibrationResult.successful ? '成功' : '失败'}"></span>
-                            </div>
-                            <div class="col-md-6">
-                                <h5>平均误差</h5>
-                                <p><span th:text="${calibrationResult.averageError}"></span> 像素</p>
-                            </div>
-                        </div>
-                        <div class="row mt-3">
-                            <div class="col-md-6">
-                                <h5>成功点数</h5>
-                                <p><span th:text="${calibrationResult.successfulPoints}"></span> / <span th:text="${calibrationResult.totalPoints}"></span></p>
-                            </div>
-                            <div class="col-md-6">
-                                <h5>校准时间</h5>
-                                <p th:text="${#temporals.format(now, 'yyyy-MM-dd HH:mm:ss')}"></p>
-                            </div>
-                        </div>
-                        <div th:if="${calibrationResult.successful}" class="alert alert-success mt-3">
-                            <strong>校准成功！</strong> 眼动仪已准备就绪，可以开始训练。
-                        </div>
-                        <div th:unless="${calibrationResult.successful}" class="alert alert-danger mt-3">
-                            <strong>校准失败！</strong> 请重新校准，确保正确佩戴眼动仪并保持注视。
-                        </div>
-                    </div>
-                </div>
-            </div>
+<main class="page-shell">
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">眼动仪校准</h1>
+            <p class="page-copy">按顺序注视校准点。每个点看稳后手动确认采样，系统再用有效采样点拟合笔记本屏幕映射。</p>
+        </div>
+        <div class="toolbar">
+            <a th:href="@{/tobii/test}" class="btn btn-outline-primary">连接页</a>
+            <a th:href="@{/dashboard}" class="btn btn-outline-secondary">系统总览</a>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script th:inline="javascript">
-        const calibrationPoints = [
-            { x: 25, y: 25 },   // 左上角
-            { x: 50, y: 25 },   // 上中
-            { x: 75, y: 25 },   // 右上角
-            { x: 25, y: 50 },   // 左中
-            { x: 50, y: 50 },   // 中心
-            { x: 75, y: 50 },   // 右中
-            { x: 25, y: 75 },   // 左下角
-            { x: 50, y: 75 },   // 下中
-            { x: 75, y: 75 }    // 右下角
-        ];
+    <div th:if="${message}" class="alert alert-success" role="alert">
+        <span th:text="${message}"></span>
+    </div>
+    <div th:if="${error}" class="alert alert-danger" role="alert">
+        <span th:text="${error}"></span>
+    </div>
 
-        let currentPoint = 0;
-        let isCalibrating = false;
-        let calibrationInterval;
-        let screenWidth = document.getElementById('calibrationArea').offsetWidth;
-        let screenHeight = document.getElementById('calibrationArea').offsetHeight;
-        const csrfHeader = [[${_csrf.headerName}]];
-        const csrfToken = [[${_csrf.token}]];
-        const calibrationStartUrl = [[@{/tobii/calibration/start}]];
+    <section class="panel mb-3">
+        <p class="section-label">校准说明</p>
+        <ul class="calibration-tips">
+            <li>确认眼动仪佩戴或摆放稳定，摄像头未被遮挡。</li>
+            <li>保持坐姿端正，眼睛到笔记本屏幕约 45-60 厘米。</li>
+            <li>红点亮起后持续注视，看稳后点击确认采样或按空格。</li>
+            <li>采样时继续看着红点，看到绿色后再移动视线。</li>
+            <li>若某个点变灰，表示有效采样不足，可以重采或跳过该点。</li>
+        </ul>
+    </section>
 
-        // 初始化校准点
-        function initCalibrationPoints() {
-            const area = document.getElementById('calibrationArea');
-            area.innerHTML = '';
+    <section class="panel">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+            <div>
+                <p class="section-label">校准状态</p>
+                <h2 class="panel-title mb-0" id="statusMessage">准备开始校准</h2>
+            </div>
+            <div class="toolbar">
+                <button id="startCalibration" class="btn btn-primary" th:disabled="${!connected}">
+                    <span th:if="${!connected}">请先连接眼动仪</span>
+                    <span th:else>开始校准</span>
+                </button>
+                <button id="confirmPoint" class="btn btn-success" disabled>确认采样</button>
+                <button id="skipPoint" class="btn btn-outline-secondary" disabled>跳过此点</button>
+                <button id="stopCalibration" class="btn btn-outline-danger" disabled>停止校准</button>
+            </div>
+        </div>
 
-            calibrationPoints.forEach((point, index) => {
-                const element = document.createElement('div');
-                element.className = 'calibration-point';
-                element.id = `point-${index}`;
-                element.style.left = point.x + '%';
-                element.style.top = point.y + '%';
-                area.appendChild(element);
-            });
+        <div class="progress mb-3" style="height: 18px;">
+            <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+        </div>
+
+        <div class="calibration-area" id="calibrationArea" aria-label="校准区域"></div>
+
+        <div th:if="${calibrationResult}" class="mt-3">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <p class="metric-label">校准状态</p>
+                        <span th:class="${calibrationResult.successful ? 'badge bg-success' : 'badge bg-danger'}"
+                              th:text="${calibrationResult.successful ? '成功' : '失败'}">成功</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <p class="metric-label">平均误差</p>
+                        <p class="metric-value"><span th:text="${calibrationResult.averageError}">0</span><span class="metric-unit">像素</span></p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <p class="metric-label">有效点数</p>
+                        <p class="metric-value"><span th:text="${calibrationResult.successfulPoints}">0</span><span class="metric-unit" th:text="'/ ' + ${calibrationResult.totalPoints}">/ 9</span></p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <p class="metric-label">校准时间</p>
+                        <p class="muted-copy mb-0" th:text="${#temporals.format(now, 'yyyy-MM-dd HH:mm:ss')}">-</p>
+                    </div>
+                </div>
+            </div>
+            <div th:if="${calibrationResult.message}" class="alert mt-3"
+                 th:classappend="${calibrationResult.successful ? ' alert-success' : ' alert-warning'}"
+                 th:text="${calibrationResult.message}">校准结果</div>
+        </div>
+    </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script th:inline="javascript">
+    const connected = [[${connected}]];
+    const csrfHeader = [[${_csrf.headerName}]];
+    const csrfToken = [[${_csrf.token}]];
+    const calibrationPointUrl = [[@{/tobii/calibration/point}]];
+    const calibrationFinishUrl = [[@{/tobii/calibration/finish}]];
+    const calibrationPointCount = [[${calibrationPointCount}]];
+    const calibrationPoints = [[${calibrationPoints}]];
+
+    const area = document.getElementById('calibrationArea');
+    const startButton = document.getElementById('startCalibration');
+    const confirmButton = document.getElementById('confirmPoint');
+    const skipButton = document.getElementById('skipPoint');
+    const stopButton = document.getElementById('stopCalibration');
+    const statusMessage = document.getElementById('statusMessage');
+    const progressBar = document.getElementById('progressBar');
+    let isCalibrating = false;
+    let isSampling = false;
+    let currentPoint = 0;
+    let collectedPointIds = [];
+
+    function calibrationDimensions() {
+        const rect = area.getBoundingClientRect();
+        return {
+            screenWidth: Math.max(1, Math.round(rect.width)),
+            screenHeight: Math.max(1, Math.round(rect.height))
+        };
+    }
+
+    function setProgress(done) {
+        const progress = Math.round((done / calibrationPoints.length) * 100);
+        progressBar.style.width = progress + '%';
+        progressBar.textContent = progress + '%';
+        progressBar.setAttribute('aria-valuenow', progress);
+    }
+
+    function initCalibrationPoints() {
+        area.innerHTML = '';
+        calibrationPoints.forEach((point, index) => {
+            const element = document.createElement('div');
+            element.className = 'calibration-point';
+            element.id = `point-${index}`;
+            element.style.left = point.x + '%';
+            element.style.top = point.y + '%';
+            area.appendChild(element);
+        });
+    }
+
+    function activePointElement() {
+        return document.getElementById(`point-${currentPoint}`);
+    }
+
+    function setControls() {
+        const canActOnPoint = isCalibrating && !isSampling && currentPoint < calibrationPoints.length;
+        startButton.disabled = connected ? isCalibrating : true;
+        confirmButton.disabled = !canActOnPoint;
+        skipButton.disabled = !canActOnPoint;
+        stopButton.disabled = !isCalibrating && !isSampling;
+        confirmButton.textContent = isSampling ? '采样中...' : '确认采样';
+    }
+
+    function showCurrentPoint() {
+        document.querySelectorAll('.calibration-point').forEach(point => {
+            point.classList.remove('active', 'sampling');
+        });
+
+        if (!isCalibrating || currentPoint >= calibrationPoints.length) {
+            setControls();
+            return;
         }
 
-        // 开始校准
-        function startCalibration() {
-            if (![[${connected}]]) {
-                alert('请先连接眼动仪');
-                return;
-            }
+        const pointElement = activePointElement();
+        pointElement.classList.remove('failed');
+        pointElement.classList.add('active');
+        statusMessage.textContent = `请注视校准点 ${currentPoint + 1}/${calibrationPoints.length}，看稳后点击“确认采样”或按空格`;
+        setControls();
+    }
 
-            isCalibrating = true;
-            currentPoint = 0;
-            document.getElementById('startCalibration').disabled = true;
-            document.getElementById('stopCalibration').disabled = false;
-            document.getElementById('statusMessage').textContent = '开始校准...';
-            document.getElementById('progressBar').style.width = '0%';
-            document.getElementById('progressBar').textContent = '0%';
+    async function postJson(url, body) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                [csrfHeader]: csrfToken
+            },
+            body: JSON.stringify(body)
+        });
+        if (!response.ok) {
+            throw new Error('请求失败：' + response.status);
+        }
+        return response;
+    }
 
-            initCalibrationPoints();
-            showNextPoint();
+    async function finishCalibration() {
+        isCalibrating = false;
+        isSampling = false;
+        statusMessage.textContent = '正在拟合校准结果...';
+        startButton.disabled = true;
+        confirmButton.disabled = true;
+        skipButton.disabled = true;
+        stopButton.disabled = true;
+
+        try {
+            const dimensions = calibrationDimensions();
+            const response = await postJson(calibrationFinishUrl, {
+                calibrationPointIds: collectedPointIds,
+                pointCount: calibrationPointCount,
+                screenWidth: dimensions.screenWidth,
+                screenHeight: dimensions.screenHeight
+            });
+            const html = await response.text();
+            document.open();
+            document.write(html);
+            document.close();
+        } catch (error) {
+            console.error('校准结果处理失败:', error);
+            statusMessage.textContent = '校准结果处理失败，请重试';
+            startButton.disabled = false;
+            stopButton.disabled = true;
+        }
+    }
+
+    async function captureCurrentPoint() {
+        if (!isCalibrating || isSampling || currentPoint >= calibrationPoints.length) {
+            return;
         }
 
-        // 显示下一个校准点
-        function showNextPoint() {
-            if (currentPoint >= calibrationPoints.length) {
-                finishCalibration();
-                return;
-            }
+        isSampling = true;
+        const pointIndex = currentPoint;
+        const pointElement = document.getElementById(`point-${pointIndex}`);
+        pointElement.classList.remove('failed');
+        pointElement.classList.add('sampling');
+        statusMessage.textContent = `正在采集校准点 ${pointIndex + 1}/${calibrationPoints.length}，请保持注视`;
+        setControls();
 
-            // 隐藏所有点
-            document.querySelectorAll('.calibration-point').forEach(point => {
-                point.classList.remove('active', 'completed');
+        try {
+            const dimensions = calibrationDimensions();
+            const response = await postJson(calibrationPointUrl, {
+                pointIndex: pointIndex + 1,
+                pointCount: calibrationPointCount,
+                screenWidth: dimensions.screenWidth,
+                screenHeight: dimensions.screenHeight
             });
-
-            // 显示当前点
-            const pointElement = document.getElementById(`point-${currentPoint}`);
-            pointElement.classList.add('active');
-
-            document.getElementById('statusMessage').textContent = `注视校准点 ${currentPoint + 1}/${calibrationPoints.length}`;
-            
-            // 更新进度
-            const progress = Math.round((currentPoint / calibrationPoints.length) * 100);
-            document.getElementById('progressBar').style.width = progress + '%';
-            document.getElementById('progressBar').textContent = progress + '%';
-
-            // 等待2秒后进入下一个点
-            calibrationInterval = setTimeout(() => {
-                pointElement.classList.remove('active');
+            const result = await response.json();
+            pointElement.classList.remove('active', 'sampling');
+            if (result.successful) {
                 pointElement.classList.add('completed');
+                collectedPointIds.push(result.calibrationPointId);
                 currentPoint++;
-                showNextPoint();
-            }, 2000);
-        }
-
-        // 完成校准
-        function finishCalibration() {
-            clearTimeout(calibrationInterval);
-            isCalibrating = false;
-            
-            document.getElementById('statusMessage').textContent = '校准完成，正在处理结果...';
-            document.getElementById('progressBar').style.width = '100%';
-            document.getElementById('progressBar').textContent = '100%';
-
-            // 提交校准数据
-            fetch(calibrationStartUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    [csrfHeader]: csrfToken
-                },
-                body: JSON.stringify({
-                    screenWidth: screenWidth,
-                    screenHeight: screenHeight
-                })
-            })
-            .then(response => response.text())
-            .then(html => {
-                document.open();
-                document.write(html);
-                document.close();
-            })
-            .catch(error => {
-                console.error('校准失败:', error);
-                document.getElementById('statusMessage').textContent = '校准失败，请重试';
-                document.getElementById('startCalibration').disabled = false;
-                document.getElementById('stopCalibration').disabled = true;
-            });
-        }
-
-        // 停止校准
-        function stopCalibration() {
-            clearTimeout(calibrationInterval);
-            isCalibrating = false;
-            document.getElementById('startCalibration').disabled = false;
-            document.getElementById('stopCalibration').disabled = true;
-            document.getElementById('statusMessage').textContent = '校准已停止';
-        }
-
-        // 初始化事件监听器
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('startCalibration').addEventListener('click', startCalibration);
-            document.getElementById('stopCalibration').addEventListener('click', stopCalibration);
-            initCalibrationPoints();
-        });
-
-        // 响应式调整
-        window.addEventListener('resize', function() {
-            screenWidth = document.getElementById('calibrationArea').offsetWidth;
-            screenHeight = document.getElementById('calibrationArea').offsetHeight;
-            if (!isCalibrating) {
-                initCalibrationPoints();
+                setProgress(currentPoint);
+                if (currentPoint >= calibrationPoints.length) {
+                    await finishCalibration();
+                } else {
+                    isSampling = false;
+                    showCurrentPoint();
+                }
+            } else {
+                pointElement.classList.add('active', 'failed');
+                statusMessage.textContent = result.message || '有效采样不足，请继续注视后再次确认，或跳过此点';
+                isSampling = false;
+                setControls();
             }
+        } catch (error) {
+            pointElement.classList.remove('sampling');
+            pointElement.classList.add('active', 'failed');
+            console.error('校准点采样失败:', error);
+            statusMessage.textContent = '校准点采样失败，请重试当前点或跳过此点';
+            isSampling = false;
+            setControls();
+        }
+    }
+
+    async function skipCurrentPoint() {
+        if (!isCalibrating || isSampling || currentPoint >= calibrationPoints.length) {
+            return;
+        }
+
+        const pointElement = activePointElement();
+        pointElement.classList.remove('active', 'sampling');
+        pointElement.classList.add('failed');
+        currentPoint++;
+        setProgress(currentPoint);
+        if (currentPoint >= calibrationPoints.length) {
+            await finishCalibration();
+        } else {
+            showCurrentPoint();
+        }
+    }
+
+    function startCalibration() {
+        if (!connected) {
+            alert('请先连接眼动仪');
+            return;
+        }
+        collectedPointIds = [];
+        currentPoint = 0;
+        isCalibrating = true;
+        isSampling = false;
+        setProgress(0);
+        initCalibrationPoints();
+        showCurrentPoint();
+    }
+
+    function stopCalibration() {
+        isCalibrating = false;
+        isSampling = false;
+        document.querySelectorAll('.calibration-point').forEach(point => {
+            point.classList.remove('active', 'sampling');
         });
-    </script>
+        statusMessage.textContent = '校准已停止';
+        setControls();
+    }
+
+    startButton.addEventListener('click', startCalibration);
+    confirmButton.addEventListener('click', captureCurrentPoint);
+    skipButton.addEventListener('click', skipCurrentPoint);
+    stopButton.addEventListener('click', stopCalibration);
+    document.addEventListener('keydown', event => {
+        const target = event.target;
+        const tagName = target && target.tagName ? target.tagName.toUpperCase() : '';
+        if (['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'A'].includes(tagName)) {
+            return;
+        }
+        if ((event.code === 'Space' || event.code === 'Enter') && !event.repeat) {
+            event.preventDefault();
+            captureCurrentPoint();
+        }
+        if (event.code === 'Escape') {
+            stopCalibration();
+        }
+    });
+    window.addEventListener('resize', () => {
+        if (!isCalibrating) {
+            initCalibrationPoints();
+        }
+    });
+    initCalibrationPoints();
+    setControls();
+</script>
 </body>
 </html>

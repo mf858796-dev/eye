@@ -29,8 +29,10 @@ public class SettingsController {
 
     @PostMapping
     public String saveSettings(
+            @RequestParam String deviceType,
             @RequestParam String glassesAddress,
             @RequestParam Integer glassesPort,
+            @RequestParam Integer calibrationPointCount,
             @RequestParam String dataRate,
             @RequestParam Integer timeout,
             @RequestParam Integer defaultDuration,
@@ -45,8 +47,10 @@ public class SettingsController {
             RedirectAttributes redirectAttributes) {
 
         AppSettingsService.UserSettings settings = new AppSettingsService.UserSettings();
+        settings.setDeviceType(deviceType);
         settings.setGlassesAddress(glassesAddress);
         settings.setGlassesPort(glassesPort);
+        settings.setCalibrationPointCount(calibrationPointCount);
         settings.setDataRate(dataRate);
         settings.setTimeout(timeout);
         settings.setDefaultDuration(defaultDuration);
@@ -64,8 +68,11 @@ public class SettingsController {
     }
 
     private void addSettingsAttributes(Model model, AppSettingsService.UserSettings settings) {
+        model.addAttribute("deviceType", settings.getDeviceType());
+        model.addAttribute("deviceLabel", settings.getDeviceLabel());
         model.addAttribute("glassesAddress", settings.getGlassesAddress());
         model.addAttribute("glassesPort", settings.getGlassesPort());
+        model.addAttribute("calibrationPointCount", settings.getCalibrationPointCount());
         model.addAttribute("dataRate", settings.getDataRate());
         model.addAttribute("timeout", settings.getTimeout());
         model.addAttribute("defaultDuration", settings.getDefaultDuration());

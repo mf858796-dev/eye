@@ -11,6 +11,7 @@ import java.util.Set;
 
 @Service
 public class AppSettingsService {
+    private static final Set<String> DEVICE_TYPES = new HashSet<>(Arrays.asList("glasses", "screen"));
     private static final Set<String> DATA_RATES = new HashSet<>(Arrays.asList("30", "60", "120"));
     private static final Set<String> DIFFICULTIES = new HashSet<>(Arrays.asList("easy", "medium", "hard"));
     private static final Set<String> EXPORT_FORMATS = new HashSet<>(Arrays.asList("csv", "json", "xml"));
@@ -25,8 +26,10 @@ public class AppSettingsService {
             return settings;
         }
 
+        settings.setDeviceType(getString(session, "deviceType", settings.getDeviceType()));
         settings.setGlassesAddress(getString(session, "glassesAddress", settings.getGlassesAddress()));
         settings.setGlassesPort(getInteger(session, "glassesPort", settings.getGlassesPort()));
+        settings.setCalibrationPointCount(getInteger(session, "calibrationPointCount", settings.getCalibrationPointCount()));
         settings.setDataRate(getString(session, "dataRate", settings.getDataRate()));
         settings.setTimeout(getInteger(session, "timeout", settings.getTimeout()));
         settings.setDefaultDuration(getInteger(session, "defaultDuration", settings.getDefaultDuration()));
@@ -46,8 +49,10 @@ public class AppSettingsService {
         }
 
         UserSettings sanitized = sanitize(settings);
+        session.setAttribute("deviceType", sanitized.getDeviceType());
         session.setAttribute("glassesAddress", sanitized.getGlassesAddress());
         session.setAttribute("glassesPort", sanitized.getGlassesPort());
+        session.setAttribute("calibrationPointCount", sanitized.getCalibrationPointCount());
         session.setAttribute("dataRate", sanitized.getDataRate());
         session.setAttribute("timeout", sanitized.getTimeout());
         session.setAttribute("defaultDuration", sanitized.getDefaultDuration());
@@ -61,7 +66,11 @@ public class AppSettingsService {
     }
 
     public String resolveGlassesBaseUrl(HttpSession session) {
-        return load(session).getGlassesBaseUrl();
+        return resolveDeviceBaseUrl(session);
+    }
+
+    public String resolveDeviceBaseUrl(HttpSession session) {
+        return load(session).getDeviceBaseUrl();
     }
 
     public UserSettings sanitize(UserSettings settings) {
@@ -70,8 +79,14 @@ public class AppSettingsService {
 
         String address = firstText(sanitized.getGlassesAddress(), defaults.getGlassesAddress());
         Endpoint endpoint = parseEndpoint(address, sanitized.getGlassesPort(), defaults.getGlassesPort());
+        sanitized.setDeviceType(valueIn(sanitized.getDeviceType(), DEVICE_TYPES, defaults.getDeviceType()));
         sanitized.setGlassesAddress(endpoint.host);
         sanitized.setGlassesPort(endpoint.port);
+        sanitized.setCalibrationPointCount(
+                sanitized.getCalibrationPointCount() != null && sanitized.getCalibrationPointCount() == 5
+                        ? 5
+                        : 9
+        );
         sanitized.setDataRate(valueIn(sanitized.getDataRate(), DATA_RATES, defaults.getDataRate()));
         sanitized.setTimeout(clamp(sanitized.getTimeout(), 1, 60, defaults.getTimeout()));
         sanitized.setDefaultDuration(clamp(sanitized.getDefaultDuration(), 1, 240, defaults.getDefaultDuration()));
@@ -85,13 +100,15 @@ public class AppSettingsService {
     private UserSettings defaultSettings() {
         Endpoint endpoint = parseEndpoint(configuredGlassesBaseUrl, null, 8080);
         UserSettings settings = new UserSettings();
+        settings.setDeviceType("glasses");
         settings.setGlassesAddress(endpoint.host);
         settings.setGlassesPort(endpoint.port);
+        settings.setCalibrationPointCount(9);
         settings.setDataRate("60");
         settings.setTimeout(10);
         settings.setDefaultDuration(30);
         settings.setDefaultDifficulty("medium");
-        settings.setAutoStart(true);
+        settings.setAutoStart(false);
         settings.setShowHeatmap(true);
         settings.setKeepDataDays(30);
         settings.setExportFormat("json");
@@ -175,8 +192,10 @@ public class AppSettingsService {
     }
 
     public static class UserSettings {
+        private String deviceType;
         private String glassesAddress;
         private Integer glassesPort;
+        private Integer calibrationPointCount;
         private String dataRate;
         private Integer timeout;
         private Integer defaultDuration;
@@ -189,11 +208,19 @@ public class AppSettingsService {
         private String simulationSpeed;
 
         public String getGlassesBaseUrl() {
+            return getDeviceBaseUrl();
+        }
+
+        public String getDeviceBaseUrl() {
             String address = glassesAddress == null ? "192.168.71.50" : glassesAddress.trim();
             if (address.startsWith("http://") || address.startsWith("https://")) {
                 address = address.replaceFirst("^https?://", "").split("[:/]", 2)[0];
             }
             return "http://" + address + ":" + (glassesPort == null ? 8080 : glassesPort);
+        }
+
+        public String getDeviceLabel() {
+            return "screen".equals(deviceType) ? "笔记本屏幕式眼动仪" : "Tobii Pro Glasses 3";
         }
 
         public int getDataIntervalMs() {
@@ -215,10 +242,14 @@ public class AppSettingsService {
             return 50;
         }
 
+        public String getDeviceType() { return deviceType; }
+        public void setDeviceType(String deviceType) { this.deviceType = deviceType; }
         public String getGlassesAddress() { return glassesAddress; }
         public void setGlassesAddress(String glassesAddress) { this.glassesAddress = glassesAddress; }
         public Integer getGlassesPort() { return glassesPort; }
         public void setGlassesPort(Integer glassesPort) { this.glassesPort = glassesPort; }
+        public Integer getCalibrationPointCount() { return calibrationPointCount; }
+        public void setCalibrationPointCount(Integer calibrationPointCount) { this.calibrationPointCount = calibrationPointCount; }
         public String getDataRate() { return dataRate; }
         public void setDataRate(String dataRate) { this.dataRate = dataRate; }
         public Integer getTimeout() { return timeout; }

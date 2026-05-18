@@ -21,6 +21,10 @@ public class CoordinateMapperService {
     private double calibrationScaleU = 1.0;
     private double calibrationScaleV = 1.0;
 
+    private double[] affineCoeffsU;
+    private double[] affineCoeffsV;
+    private boolean useAffine = false;
+
     private double[] polyCoeffsU;
     private double[] polyCoeffsV;
     private boolean usePolynomial = false;
@@ -37,6 +41,8 @@ public class CoordinateMapperService {
     public CoordinateMapperService() {
         this.screenWidth = 1920;
         this.screenHeight = 1080;
+        this.affineCoeffsU = new double[]{0.0, 1.0, 0.0};
+        this.affineCoeffsV = new double[]{0.0, 0.0, 1.0};
         this.polyCoeffsU = new double[10];
         this.polyCoeffsV = new double[10];
         this.smoothLastU = new double[]{0.0, 0.0};
@@ -46,6 +52,8 @@ public class CoordinateMapperService {
     public CoordinateMapperService(int screenWidth, int screenHeight) {
         this.screenWidth = screenWidth;
         this.screenHeight = screenHeight;
+        this.affineCoeffsU = new double[]{0.0, 1.0, 0.0};
+        this.affineCoeffsV = new double[]{0.0, 0.0, 1.0};
         this.polyCoeffsU = new double[10];
         this.polyCoeffsV = new double[10];
         this.smoothLastU = new double[]{0.0, 0.0};
@@ -60,6 +68,9 @@ public class CoordinateMapperService {
             double[] mapped = applyHomography(u, v);
             calibratedU = mapped[0];
             calibratedV = mapped[1];
+        } else if (isCalibrated && useAffine && affineCoeffsU != null && affineCoeffsV != null) {
+            calibratedU = evaluateAffine(affineCoeffsU, u, v);
+            calibratedV = evaluateAffine(affineCoeffsV, u, v);
         } else if (isCalibrated && usePolynomial && polyCoeffsU != null && polyCoeffsV != null) {
             calibratedU = evaluatePolynomial(polyCoeffsU, u, v);
             calibratedV = evaluatePolynomial(polyCoeffsV, u, v);
@@ -163,6 +174,13 @@ public class CoordinateMapperService {
                coeffs[9] * v * v * v;
     }
 
+    private double evaluateAffine(double[] coeffs, double u, double v) {
+        if (coeffs == null || coeffs.length < 3) {
+            return u;
+        }
+        return coeffs[0] + coeffs[1] * u + coeffs[2] * v;
+    }
+
     private double[] applyHomography(double u, double v) {
         double denominator = homographyMatrix[6] * u + homographyMatrix[7] * v + homographyMatrix[8];
         if (Math.abs(denominator) < 1e-9) {
@@ -183,9 +201,29 @@ public class CoordinateMapperService {
         this.calibrationOffsetV = offsetV;
         this.calibrationScaleU = scaleU;
         this.calibrationScaleV = scaleV;
+        this.useAffine = false;
+        this.usePolynomial = false;
+        this.useHomography = false;
         this.isCalibrated = true;
+        resetSmoothing();
         logger.info("Calibration data set: offsetU={}, offsetV={}, scaleU={}, scaleV={}",
                     offsetU, offsetV, scaleU, scaleV);
+    }
+
+    public void setAffineCalibration(double[] coeffsU, double[] coeffsV) {
+        if (coeffsU == null || coeffsU.length < 3 || coeffsV == null || coeffsV.length < 3) {
+            throw new IllegalArgumentException("Affine calibration requires three coefficients per axis");
+        }
+        this.affineCoeffsU = coeffsU.clone();
+        this.affineCoeffsV = coeffsV.clone();
+        this.useAffine = true;
+        this.usePolynomial = false;
+        this.useHomography = false;
+        this.isCalibrated = true;
+        resetSmoothing();
+        logger.info("Affine calibration set: u=[{}, {}, {}], v=[{}, {}, {}]",
+                affineCoeffsU[0], affineCoeffsU[1], affineCoeffsU[2],
+                affineCoeffsV[0], affineCoeffsV[1], affineCoeffsV[2]);
     }
 
     public void setPolynomialCalibration(double[] coeffsU, double[] coeffsV) {
@@ -195,32 +233,47 @@ public class CoordinateMapperService {
         if (coeffsV != null && coeffsV.length >= 10) {
             this.polyCoeffsV = coeffsV;
         }
+        this.useAffine = false;
         this.usePolynomial = true;
+        this.useHomography = false;
         this.isCalibrated = true;
+        resetSmoothing();
         logger.info("Polynomial calibration enabled");
     }
 
     public void setHomographyMatrix(double[] matrix) {
         if (matrix != null && matrix.length == 9) {
             this.homographyMatrix = matrix;
+            this.useAffine = false;
+            this.usePolynomial = false;
             this.useHomography = true;
             this.isCalibrated = true;
+            resetSmoothing();
             logger.info("Homography matrix set");
         }
     }
 
     public void clearCalibration() {
         this.isCalibrated = false;
+        this.useAffine = false;
         this.usePolynomial = false;
         this.useHomography = false;
         this.calibrationOffsetU = 0.0;
         this.calibrationOffsetV = 0.0;
         this.calibrationScaleU = 1.0;
         this.calibrationScaleV = 1.0;
+        this.affineCoeffsU = new double[]{0.0, 1.0, 0.0};
+        this.affineCoeffsV = new double[]{0.0, 0.0, 1.0};
         this.polyCoeffsU = new double[10];
         this.polyCoeffsV = new double[10];
         this.homographyMatrix = null;
+        resetSmoothing();
         logger.info("Calibration cleared");
+    }
+
+    public void resetSmoothing() {
+        this.smoothLastU = new double[]{0.0, 0.0};
+        this.smoothLastV = new double[]{0.0, 0.0};
     }
 
     public boolean isCalibrated() {

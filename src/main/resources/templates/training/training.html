@@ -231,6 +231,34 @@
             flex-wrap: wrap;
             justify-content: flex-end;
         }
+        .training-gate {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(12, 18, 26, 0.88);
+            color: #fff;
+            text-align: center;
+        }
+        .training-gate-card {
+            width: min(520px, 100%);
+            padding: 24px;
+            border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.08);
+        }
+        .training-gate-card p {
+            color: rgba(255,255,255,0.78);
+        }
+        .training-gate-actions {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
         body.fullscreen-training {
             overflow: hidden;
             background-color: #101418;
@@ -328,16 +356,21 @@
             <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
                 <h3>训练 - 代码阅读专注力训练</h3>
                 <div class="training-header-actions">
-                    <span class="recording-indicator">
+                    <span class="recording-indicator" id="recordingIndicator" style="display: none;">
                         <span class="recording-dot"></span>
                         <span>REC</span>
                     </span>
+                    <span class="status-badge status-disconnected" id="trainingState">待开始</span>
                     <span class="status-badge status-recording" id="connectionStatus">等待连接</span>
+                    <button id="beginTraining" class="btn btn-sm btn-success" type="button">开始训练</button>
+                    <button id="pauseTraining" class="btn btn-sm btn-outline-light" type="button" style="display: none;">暂停</button>
+                    <button id="resumeTraining" class="btn btn-sm btn-success" type="button" style="display: none;">继续</button>
                     <button id="startCollection" class="btn btn-sm btn-light ms-2" style="display: none;">开始采集</button>
                     <button id="fullscreenToggle" class="btn btn-sm btn-outline-light" type="button" aria-pressed="false" title="按 Esc 可退出全屏">全屏训练</button>
                 </div>
             </div>
             <div class="card-body training-body">
+                <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
                 <div class="row training-layout">
                     <div class="col-md-8 training-main">
                         <h5 class="mb-3">代码示例: <span th:text="${codeExample.title}"></span></h5>
@@ -350,6 +383,16 @@
                             <div class="code-overlay" th:text="${codeExample.code}"></div>
                             <canvas class="gaze-heatmap" id="gazeHeatmap"></canvas>
                             <div class="gaze-point" id="gazePoint" style="display: none;"></div>
+                            <div class="training-gate" id="trainingGate">
+                                <div class="training-gate-card">
+                                    <h4>准备开始训练</h4>
+                                    <p>请先确认坐姿、校准状态和阅读任务。准备好后再开始计时与采集。</p>
+                                    <div class="training-gate-actions">
+                                        <button id="beginTrainingGate" class="btn btn-success" type="button">开始训练</button>
+                                        <button id="beginFullscreenGate" class="btn btn-outline-light" type="button">全屏训练</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-4 training-sidebar">
@@ -368,11 +411,12 @@
                                     </div>
                                 </div>
                                 <div class="data-panel">
-                                    <div class="data-label">目标完成度</div>
+                                    <div class="data-label">阅读完成度</div>
                                     <div class="data-value"><span id="targetCompletion">0.0</span>%</div>
                                     <div class="progress mt-1" style="height: 6px;">
                                         <div class="progress-bar bg-success" id="targetCompletionProgress" role="progressbar" style="width: 0%"></div>
                                     </div>
+                                    <div class="small text-muted mt-1" id="readingProgressLabel">从第 1 行开始顺序阅读</div>
                                 </div>
                             </div>
                         </div>
@@ -495,6 +539,7 @@
     <form id="gazeDataForm" th:action="@{/training/submit-gaze-data}" method="post">
         <input type="hidden" name="sessionId" th:value="${trainingSession.id}">
         <input type="hidden" name="gazeDataJson" id="gazeDataJson">
+        <input type="hidden" name="dataMode" id="dataMode" value="real">
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
     </form>
 
@@ -515,6 +560,11 @@
         const taskType = [[${taskType}]];
         const targetLineNumbers = parseTargetLines(targetLinesRaw);
         const targetLineSet = new Set(targetLineNumbers);
+        const codeLines = codeText.split('\n');
+        const readableLineNumbers = codeLines
+            .map((line, index) => line.trim() ? index + 1 : null)
+            .filter(lineNumber => lineNumber !== null);
+        const readableLineSet = new Set(readableLineNumbers);
         const GAZE3D_HORIZONTAL_FOV_DEGREES = 82;
         const GAZE3D_VERTICAL_FOV_DEGREES = 52;
         let seconds = 0;
@@ -525,6 +575,9 @@
         let fixationCount = 0;
         let totalFixationDuration = 0;
         let isRecording = false;
+        let isTrainingStarted = false;
+        let isTrainingPaused = false;
+        let usingSimulationData = false;
         let gazeUpdateInterval;
         
         let gazeHistory = [];
@@ -537,13 +590,21 @@
         let targetHits = 0;
         let completedTargetLines = new Set();
         let targetFocusMsByLine = {};
+        let readFocusMsByLine = {};
+        let nextReadableLineIndex = 0;
         const TARGET_LINE_FOCUS_MS = 500;
+        const AUTO_END_DELAY_MS = 800;
+        let autoEndTimer = null;
+        let trainingSubmitted = false;
         
         const TARGET_TRAINING_DURATION = [[${targetTrainingDuration}]];
         const fullscreenToggle = document.getElementById('fullscreenToggle');
         const trainingContainer = document.querySelector('.training-container');
         
         function startTimer() {
+            if (timerInterval) {
+                return;
+            }
             timerInterval = setInterval(() => {
                 seconds++;
                 const hours = Math.floor(seconds / 3600);
@@ -558,6 +619,20 @@
                 document.getElementById('progressCircle').style.strokeDashoffset = offset;
                 document.getElementById('progressText').textContent = Math.round(progress) + '%';
             }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+
+        function clearAutoEndTimer() {
+            if (autoEndTimer) {
+                clearTimeout(autoEndTimer);
+                autoEndTimer = null;
+            }
         }
 
         function parseTargetLines(value) {
@@ -697,11 +772,74 @@
             }
         }
 
+        function setTrainingState(text, statusClass) {
+            const state = document.getElementById('trainingState');
+            state.textContent = text;
+            state.className = 'status-badge ' + statusClass;
+        }
+
+        function updateTrainingControls() {
+            const beginVisible = !isTrainingStarted;
+            document.getElementById('beginTraining').style.display = beginVisible ? 'inline-block' : 'none';
+            document.getElementById('pauseTraining').style.display = isTrainingStarted && !isTrainingPaused ? 'inline-block' : 'none';
+            document.getElementById('resumeTraining').style.display = isTrainingStarted && isTrainingPaused ? 'inline-block' : 'none';
+            document.getElementById('recordingIndicator').style.display = isRecording && !isTrainingPaused ? 'inline-flex' : 'none';
+        }
+
+        function beginTraining() {
+            if (isTrainingStarted) {
+                return;
+            }
+            isTrainingStarted = true;
+            isTrainingPaused = false;
+            setTrainingState('准备采集', 'status-recording');
+            updateTrainingControls();
+            if (autoStart || simulationMode) {
+                connectToGlasses();
+            } else {
+                document.getElementById('connectionStatus').textContent = '待开始采集';
+                document.getElementById('connectionStatus').className = 'status-badge status-disconnected';
+                document.getElementById('startCollection').style.display = 'inline-block';
+            }
+            const gate = document.getElementById('trainingGate');
+            if (gate) {
+                gate.style.display = 'none';
+            }
+        }
+
+        function pauseTraining(reason) {
+            if (!isTrainingStarted) {
+                return;
+            }
+            isTrainingPaused = true;
+            isRecording = false;
+            stopTimer();
+            stopGazeCollection();
+            clearAutoEndTimer();
+            setTrainingState(reason || '已暂停', 'status-disconnected');
+            updateTrainingControls();
+            document.getElementById('startCollection').style.display = 'inline-block';
+        }
+
+        function resumeTraining() {
+            if (!isTrainingStarted || !isTrainingPaused) {
+                return;
+            }
+            isTrainingPaused = false;
+            setTrainingState('准备采集', 'status-recording');
+            updateTrainingControls();
+            connectToGlasses();
+        }
+
         function connectToGlasses() {
+            if (!isTrainingStarted) {
+                beginTraining();
+                return;
+            }
             stopGazeCollection();
             document.getElementById('startCollection').style.display = 'none';
 
-            if (simulationMode) {
+            if (simulationMode || usingSimulationData) {
                 startSimulationMode();
                 return;
             }
@@ -710,9 +848,14 @@
                 .then(response => response.json())
                 .then(status => {
                     if (status.connected) {
+                        usingSimulationData = false;
                         isRecording = true;
+                        isTrainingPaused = false;
+                        startTimer();
+                        setTrainingState('训练中', 'status-connected');
                         document.getElementById('connectionStatus').textContent = '已连接';
                         document.getElementById('connectionStatus').className = 'status-badge status-connected';
+                        updateTrainingControls();
                         restoreTrainingSurface();
                         startGazeDataCollection();
                     } else {
@@ -724,37 +867,53 @@
                 });
         }
         
-        function showConnectionRequired() {
+        function showConnectionRequired(message) {
+            isRecording = false;
+            stopTimer();
+            clearAutoEndTimer();
+            setTrainingState('等待设备', 'status-disconnected');
+            updateTrainingControls();
             document.getElementById('connectionStatus').textContent = '未连接';
             document.getElementById('connectionStatus').className = 'status-badge status-disconnected';
             
             // 清除之前的定时器
             if (gazeUpdateInterval) {
                 clearInterval(gazeUpdateInterval);
+                gazeUpdateInterval = null;
             }
             
             const container = document.getElementById('gazeContainer');
             container.innerHTML = `
                 <div class="text-center p-5">
                     <h5 class="text-muted mb-3">眼动仪未连接</h5>
-                    <p class="text-muted">请先连接眼动仪设备或使用模拟模式测试</p>
+                    <p class="text-muted">${message || '请先连接眼动仪设备，确认设备稳定后再开始采集。'}</p>
                     <div class="d-flex flex-column gap-2 mt-4">
                         <a href="${tobiiTestUrl}" class="btn btn-primary">前往连接页面</a>
-                        <button id="simulateButton" class="btn btn-secondary">使用模拟数据</button>
+                        <button id="retryCollection" class="btn btn-outline-primary">重新检测设备</button>
+                        <button id="simulateButton" class="btn btn-secondary">明确使用模拟数据</button>
                     </div>
                 </div>
             `;
             
             // 添加模拟按钮点击事件
+            document.getElementById('retryCollection').addEventListener('click', connectToGlasses);
             document.getElementById('simulateButton').addEventListener('click', startSimulationMode);
         }
 
         function startSimulationMode() {
             stopGazeCollection();
+            if (!isTrainingStarted) {
+                isTrainingStarted = true;
+            }
+            usingSimulationData = true;
             isRecording = true;
+            isTrainingPaused = false;
+            startTimer();
+            setTrainingState('模拟训练中', 'status-recording');
             document.getElementById('connectionStatus').textContent = '模拟模式';
             document.getElementById('connectionStatus').className = 'status-badge status-recording';
             document.getElementById('startCollection').style.display = 'none';
+            updateTrainingControls();
             restoreTrainingSurface();
             startMouseSimulation();
         }
@@ -772,9 +931,7 @@
                         processGazeData(data);
                     }
                 } catch (error) {
-                    document.getElementById('connectionStatus').textContent = '模拟补偿';
-                    document.getElementById('connectionStatus').className = 'status-badge status-recording';
-                    simulateSingleGazePoint();
+                    showConnectionRequired('设备采集中断，训练已暂停。请重新检测设备，或手动切换到模拟数据。');
                 }
             }, GAZE_INTERVAL_MS);
         }
@@ -916,7 +1073,10 @@
             document.getElementById('sampleCount').textContent = sampleCount;
             
             const timestamp = Date.now();
-            const fixationDuration = Math.floor(Math.random() * 200) + 100;
+            const previousPoint = gazeDataList.length > 0 ? gazeDataList[gazeDataList.length - 1] : null;
+            const fixationDuration = previousPoint
+                ? Math.max(40, Math.min(1000, timestamp - previousPoint.timestamp))
+                : GAZE_INTERVAL_MS;
             const lineInfo = updateTargetTracking(screenGaze, fixationDuration);
             const point = {
                 timestamp: timestamp,
@@ -1008,6 +1168,7 @@
             if (lineNumber !== null) {
                 document.getElementById('currentLine').textContent = lineNumber;
                 highlightCurrentLine(lineNumber);
+                updateSequentialReadingProgress(lineNumber, fixationDuration);
                 targetSamples++;
                 if (targetMatched) {
                     targetHits++;
@@ -1029,6 +1190,29 @@
                 areaOfInterest: lineNumber === null ? 'outside-code' : (targetMatched ? 'target-code' : 'code'),
                 targetRegion: targetMatched ? `line-${lineNumber}` : (lineNumber === null ? 'outside-code' : 'non-target-code')
             };
+        }
+
+        function updateSequentialReadingProgress(lineNumber, fixationDuration) {
+            if (readableLineNumbers.length === 0 || nextReadableLineIndex >= readableLineNumbers.length) {
+                return;
+            }
+
+            const expectedLine = readableLineNumbers[nextReadableLineIndex];
+            if (lineNumber !== expectedLine || !readableLineSet.has(lineNumber)) {
+                return;
+            }
+
+            readFocusMsByLine[lineNumber] = (readFocusMsByLine[lineNumber] || 0) + fixationDuration;
+            if (readFocusMsByLine[lineNumber] < TARGET_LINE_FOCUS_MS) {
+                return;
+            }
+
+            const lineElement = document.querySelector(`.code-line[data-line-number="${lineNumber}"]`);
+            if (lineElement) {
+                lineElement.classList.add('completed-target-line');
+            }
+            nextReadableLineIndex++;
+            scheduleAutoEndIfCompleted();
         }
 
         function getLineNumberFromGaze(gaze2d) {
@@ -1057,11 +1241,36 @@
 
         function updateTargetPanels() {
             const hitRate = targetSamples === 0 ? 0 : targetHits * 100 / targetSamples;
-            const completion = targetLineSet.size === 0 ? (targetSamples > 0 ? 100 : 0) : completedTargetLines.size * 100 / targetLineSet.size;
+            const completion = readableLineNumbers.length === 0 ? 0 : nextReadableLineIndex * 100 / readableLineNumbers.length;
+            const nextLine = readableLineNumbers[nextReadableLineIndex];
             document.getElementById('targetHitRate').textContent = hitRate.toFixed(1);
             document.getElementById('targetHitProgress').style.width = Math.min(100, hitRate) + '%';
             document.getElementById('targetCompletion').textContent = completion.toFixed(1);
             document.getElementById('targetCompletionProgress').style.width = Math.min(100, completion) + '%';
+            document.getElementById('readingProgressLabel').textContent = nextLine
+                ? `下一行：第 ${nextLine} 行`
+                : '已从上到下读完一遍';
+        }
+
+        function scheduleAutoEndIfCompleted() {
+            if (trainingSubmitted
+                || autoEndTimer
+                || readableLineNumbers.length === 0
+                || nextReadableLineIndex < readableLineNumbers.length
+                || !isTrainingStarted
+                || isTrainingPaused
+                || !isRecording) {
+                return;
+            }
+
+            setTrainingState('阅读完成，正在结束', 'status-connected');
+            document.getElementById('readingProgressLabel').textContent = '已从上到下读完一遍，正在生成报告';
+            autoEndTimer = setTimeout(() => {
+                autoEndTimer = null;
+                if (nextReadableLineIndex >= readableLineNumbers.length && isRecording && !isTrainingPaused) {
+                    submitTraining(true);
+                }
+            }, AUTO_END_DELAY_MS);
         }
         
         function isValidGaze3dPoint(gaze3d) {
@@ -1360,16 +1569,46 @@
         function collectGazeData() {
             return JSON.stringify(gazeDataList);
         }
-        
-        document.getElementById('endTraining').addEventListener('click', function() {
-            clearInterval(timerInterval);
+
+        function submitTraining(autoTriggered) {
+            if (trainingSubmitted) {
+                return;
+            }
+
+            const modeLabel = usingSimulationData ? '模拟数据' : '真实眼动数据';
+            if (!usingSimulationData && gazeDataList.length === 0) {
+                setTrainingState('无有效数据', 'status-disconnected');
+                alert('本次还没有采集到有效眼动数据，请先连接设备并开始采集。');
+                return;
+            }
+
+            if (!autoTriggered) {
+                const summary = `结束训练并生成报告？\n\n数据模式：${modeLabel}\n采样点：${gazeDataList.length}\n训练时长：${document.getElementById('timer').textContent}`;
+                if (!confirm(summary)) {
+                    return;
+                }
+            }
+
+            trainingSubmitted = true;
+            clearAutoEndTimer();
+            stopTimer();
             stopGazeCollection();
             isRecording = false;
+            isTrainingPaused = true;
+            updateTrainingControls();
+            const endButton = document.getElementById('endTraining');
+            endButton.disabled = true;
+            endButton.textContent = autoTriggered ? '阅读完成，正在生成报告' : '正在生成报告';
+            setTrainingState(autoTriggered ? '阅读完成' : '训练结束', 'status-connected');
+            document.getElementById('dataMode').value = usingSimulationData ? 'simulation' : 'real';
             document.getElementById('gazeDataJson').value = collectGazeData();
             document.getElementById('gazeDataForm').submit();
+        }
+
+        document.getElementById('endTraining').addEventListener('click', function() {
+            submitTraining(false);
         });
         
-        startTimer();
         renderCodeOverlay();
         updateTargetPanels();
         if (!showHeatmap) {
@@ -1380,14 +1619,15 @@
         document.addEventListener('webkitfullscreenchange', () => syncFullscreenLayout());
         document.addEventListener('msfullscreenchange', () => syncFullscreenLayout());
         window.addEventListener('resize', refreshHeatmapSize);
+        document.getElementById('beginTraining').addEventListener('click', beginTraining);
+        document.getElementById('beginTrainingGate').addEventListener('click', beginTraining);
+        document.getElementById('beginFullscreenGate').addEventListener('click', toggleFullscreenTraining);
+        document.getElementById('pauseTraining').addEventListener('click', () => pauseTraining('已暂停'));
+        document.getElementById('resumeTraining').addEventListener('click', resumeTraining);
         document.getElementById('startCollection').addEventListener('click', connectToGlasses);
-        if (autoStart) {
-            setTimeout(connectToGlasses, 1000);
-        } else {
-            document.getElementById('connectionStatus').textContent = '待开始';
-            document.getElementById('connectionStatus').className = 'status-badge status-disconnected';
-            document.getElementById('startCollection').style.display = 'inline-block';
-        }
+        document.getElementById('connectionStatus').textContent = '待开始';
+        document.getElementById('connectionStatus').className = 'status-badge status-disconnected';
+        updateTrainingControls();
     </script>
 </body>
 </html>

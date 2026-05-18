@@ -2,8 +2,8 @@
 
 ## 环境要求
 
-- JDK 8 或更高版本
-- Maven 3.6 或更高版本
+- JDK 8 或更高版本；真实眼动数据采集建议 JDK 17 或更高版本
+- Maven 3.6 或更高版本，或项目 Maven Wrapper
 - MySQL 5.7 或更高版本（仅生产环境需要）
 
 ## 安装步骤
@@ -20,6 +20,8 @@ cd bishe
 ```bash
 .\apache-maven-3.9.5\bin\mvn.cmd clean package
 ```
+
+如果已安装 Maven 并加入 PATH，也可以使用 `mvn clean package`。不建议在部署脚本中长期依赖 IntelliJ 内置 Maven。
 
 ### 3. 配置数据库
 
@@ -58,14 +60,29 @@ set APP_ADMIN_PASSWORD=change_me
 
 ### 开发环境运行
 
-```bash
-.\apache-maven-3.9.5\bin\mvn.cmd spring-boot:run
+推荐使用启动脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1 -Build -JavaHome "C:\Program Files\Java\jdk1.8.0_181"
+```
+
+脚本会自动完成端口检查、日志轮转、PID 文件写入、UTF-8 编码参数和 JVM 延迟优化参数。查看状态和停止服务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\status.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\stop.ps1
 ```
 
 ### 生产环境运行
 
-```bash
-java -jar -Dspring.profiles.active=production target/eye-tracking-system-1.0.0.jar
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1 -NoBuild -Profile production -XmsMB 1024 -XmxMB 2048
+```
+
+如需手动运行 JAR，请把 JVM 参数放在 `-jar` 之前：
+
+```powershell
+java -Dfile.encoding=UTF-8 -Dspring.profiles.active=production -Xms1024m -Xmx2048m -XX:+UseG1GC -XX:MaxGCPauseMillis=30 -jar .\target\eye-tracking-system-1.0.0.jar
 ```
 
 ## 访问系统
@@ -90,9 +107,10 @@ java -jar -Dspring.profiles.active=production target/eye-tracking-system-1.0.0.j
 1. **用户管理**：注册、登录、个人资料管理
 2. **训练管理**：创建训练会话、开始训练、结束训练
 3. **代码示例**：Java、Python、JavaScript三种语言的代码示例
-4. **眼动数据采集**：模拟采集用户的眼动数据
-5. **注意力分析**：分析用户的注意力模式和专注程度
-6. **报告生成**：生成详细的注意力分析报告
+4. **眼动数据采集**：支持 Tobii Pro Glasses 3、笔记本屏幕眼动仪桥接接口和演示模拟数据
+5. **校准管理**：支持 5 点或 9 点手动确认校准，记录校准质量
+6. **注意力分析**：分析用户的注意力模式、阅读顺序、回视和代码覆盖情况
+7. **报告生成**：生成详细的注意力分析报告
 
 ## 系统架构
 
@@ -120,6 +138,8 @@ eye-tracking-system/
 │   │       └── templates/       # Thymeleaf模板
 │   └── test/                    # 测试代码
 ├── target/                      # 编译输出目录
+├── scripts/                     # 启动、停止、状态检查脚本
+├── logs/                        # 运行日志和 PID 文件
 ├── DEPLOYMENT.md                # 部署指南
 └── pom.xml                      # Maven项目配置文件
 ```
@@ -134,6 +154,12 @@ eye-tracking-system/
 server.port=8081
 ```
 
+也可以启动时指定端口：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1 -NoBuild -Port 8081
+```
+
 ### 2. 数据库连接失败
 
 - 检查数据库服务是否启动
@@ -145,6 +171,7 @@ server.port=8081
 - 检查JDK是否正确安装
 - 检查Maven依赖是否正确下载
 - 检查系统配置是否正确
+- 执行 `.\scripts\status.ps1` 查看 PID、端口和最近日志
 
 ## 技术支持
 

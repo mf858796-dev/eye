@@ -8,8 +8,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -18,6 +22,10 @@ public class AttentionModelService {
     private GazeDataService gazeDataService;
     @Autowired
     private ReportRepository reportRepository;
+    @Autowired
+    private CodeRepositoryService codeRepositoryService;
+
+    private static final int MIN_READ_LINE_FOCUS_MS = 500;
 
     // 生成注意力分析报告
     public Report generateAttentionReport(TrainingSession trainingSession) {
@@ -42,11 +50,13 @@ public class AttentionModelService {
 
         AttentionService.AttentionMetrics metrics = attentionService.getMetrics();
 
+        ReadingMetrics readingMetrics = calculateReadingMetrics(trainingSession, processedData);
+
         // 生成建议
-        String recommendations = generateRecommendations(attentionScore, focusPattern);
+        String recommendations = generateRecommendations(attentionScore, focusPattern, readingMetrics);
 
         // 生成详细分析
-        String detailedAnalysis = generateDetailedAnalysis(processedData, attentionScore, focusPattern);
+        String detailedAnalysis = generateDetailedAnalysis(processedData, attentionScore, focusPattern, readingMetrics);
 
         // 创建报告
         Report report = new Report();
@@ -105,7 +115,7 @@ public class AttentionModelService {
     }
 
     // 生成建议
-    private String generateRecommendations(double attentionScore, String focusPattern) {
+    private String generateRecommendations(double attentionScore, String focusPattern, ReadingMetrics readingMetrics) {
         StringBuilder recommendations = new StringBuilder();
 
         if (attentionScore < 50) {
@@ -128,11 +138,21 @@ public class AttentionModelService {
             recommendations.append("4. 建议扩展关注范围，培养全局思维\n");
         }
 
+        if (readingMetrics.sequentialCompletionRate < 80.0) {
+            recommendations.append("5. 代码阅读建议按从上到下的顺序完成一遍，避免直接跳到后半段\n");
+        }
+        if (readingMetrics.regressionRate > 25.0) {
+            recommendations.append("6. 回视比例偏高，可先通读结构，再回到关键行细看\n");
+        }
+        if (readingMetrics.outsideCodeRate > 20.0) {
+            recommendations.append("7. 视线离开代码区域较多，建议重新校准或调整坐姿/屏幕距离\n");
+        }
+
         return recommendations.toString();
     }
 
     // 生成详细分析
-    private String generateDetailedAnalysis(List<GazeData> processedData, double attentionScore, String focusPattern) {
+    private String generateDetailedAnalysis(List<GazeData> processedData, double attentionScore, String focusPattern, ReadingMetrics readingMetrics) {
         StringBuilder analysis = new StringBuilder();
 
         analysis.append("# 注意力分析报告\n\n");
@@ -142,7 +162,7 @@ public class AttentionModelService {
         analysis.append("- 数据点数量：").append(processedData.size()).append("\n\n");
 
         analysis.append("## 详细分析\n");
-        
+
         // 统计fixation数量和平均持续时间
         long fixationCount = processedData.stream()
                 .filter(data -> "FIXATION".equals(data.getFixationType()))
@@ -158,6 +178,13 @@ public class AttentionModelService {
         analysis.append("- Fixation数量：").append(fixationCount).append("\n");
         analysis.append("- 平均Fixation持续时间：").append(String.format("%.2f", avgFixationDuration)).append("ms\n\n");
 
+        analysis.append("## 代码阅读路径\n");
+        analysis.append("- 顺序阅读完成度：").append(String.format("%.2f", readingMetrics.sequentialCompletionRate)).append("%\n");
+        analysis.append("- 代码行覆盖率：").append(String.format("%.2f", readingMetrics.lineCoverageRate)).append("%\n");
+        analysis.append("- 回视比例：").append(String.format("%.2f", readingMetrics.regressionRate)).append("%\n");
+        analysis.append("- 离开代码区域比例：").append(String.format("%.2f", readingMetrics.outsideCodeRate)).append("%\n");
+        analysis.append("- 平均行注视时长：").append(String.format("%.2f", readingMetrics.averageLineFixationMs)).append("ms\n\n");
+
         // 分析区域分布
         Map<String, Long> areaCountMap = processedData.stream()
                 .collect(Collectors.groupingBy(this::getAreaOfInterest, Collectors.counting()));
@@ -170,11 +197,114 @@ public class AttentionModelService {
         return analysis.toString();
     }
 
+    private ReadingMetrics calculateReadingMetrics(TrainingSession trainingSession, List<GazeData> processedData) {
+        ReadingMetrics metrics = new ReadingMetrics();
+        if (processedData == null || processedData.isEmpty()) {
+            return metrics;
+        }
+
+        List<Integer> readableLines = readableLineNumbers(trainingSession, processedData);
+        Set<Integer> readableLineSet = new LinkedHashSet<>(readableLines);
+        Set<Integer> observedLines = new LinkedHashSet<>();
+        Map<Integer, Integer> focusMsByLine = new java.util.HashMap<>();
+
+        List<GazeData> ordered = processedData.stream()
+                .sorted(Comparator.comparing(GazeData::getTimestamp, Comparator.nullsLast(LocalDateTime::compareTo)))
+                .collect(Collectors.toList());
+
+        int outsideCount = 0;
+        int lineFixationCount = 0;
+        int totalLineFixationMs = 0;
+        int transitions = 0;
+        int regressions = 0;
+        Integer previousLine = null;
+        int nextLineIndex = 0;
+
+        for (GazeData data : ordered) {
+            Integer lineNumber = data.getLineNumber();
+            int fixationDuration = data.getFixationDuration() == null ? 100 : Math.max(0, data.getFixationDuration());
+            if (lineNumber == null || lineNumber <= 0) {
+                outsideCount++;
+                continue;
+            }
+
+            observedLines.add(lineNumber);
+            lineFixationCount++;
+            totalLineFixationMs += fixationDuration;
+
+            if (previousLine != null && !previousLine.equals(lineNumber)) {
+                transitions++;
+                if (lineNumber < previousLine) {
+                    regressions++;
+                }
+            }
+            previousLine = lineNumber;
+
+            if (nextLineIndex < readableLines.size()
+                    && readableLineSet.contains(lineNumber)
+                    && lineNumber.equals(readableLines.get(nextLineIndex))) {
+                int accumulated = focusMsByLine.getOrDefault(lineNumber, 0) + fixationDuration;
+                focusMsByLine.put(lineNumber, accumulated);
+                if (accumulated >= MIN_READ_LINE_FOCUS_MS) {
+                    nextLineIndex++;
+                }
+            }
+        }
+
+        metrics.sequentialCompletionRate = readableLines.isEmpty()
+                ? 0.0
+                : nextLineIndex * 100.0 / readableLines.size();
+        if (trainingSession != null && trainingSession.getCompletionRate() != null) {
+            metrics.sequentialCompletionRate = trainingSession.getCompletionRate();
+        }
+        metrics.lineCoverageRate = readableLines.isEmpty()
+                ? 0.0
+                : observedLines.stream().filter(readableLineSet::contains).count() * 100.0 / readableLines.size();
+        metrics.regressionRate = transitions == 0 ? 0.0 : regressions * 100.0 / transitions;
+        metrics.outsideCodeRate = ordered.isEmpty() ? 0.0 : outsideCount * 100.0 / ordered.size();
+        metrics.averageLineFixationMs = lineFixationCount == 0 ? 0.0 : totalLineFixationMs * 1.0 / lineFixationCount;
+        return metrics;
+    }
+
+    private List<Integer> readableLineNumbers(TrainingSession trainingSession, List<GazeData> processedData) {
+        if (trainingSession != null && trainingSession.getTrainingLevelId() != null) {
+            CodeRepositoryService.CodeExample codeExample =
+                    codeRepositoryService.getCodeExampleById(trainingSession.getTrainingLevelId());
+            if (codeExample != null && codeExample.getCode() != null) {
+                List<Integer> lines = new ArrayList<>();
+                String[] codeLines = codeExample.getCode().split("\\r?\\n", -1);
+                for (int i = 0; i < codeLines.length; i++) {
+                    if (!codeLines[i].trim().isEmpty()) {
+                        lines.add(i + 1);
+                    }
+                }
+                if (!lines.isEmpty()) {
+                    return lines;
+                }
+            }
+        }
+
+        return processedData.stream()
+                .map(GazeData::getLineNumber)
+                .filter(line -> line != null && line > 0)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+    }
+
     private String getAreaOfInterest(GazeData data) {
         if (data.getAreaOfInterest() == null || data.getAreaOfInterest().trim().isEmpty()) {
             return "code";
         }
         return data.getAreaOfInterest();
+    }
+
+    private static class ReadingMetrics {
+        private double sequentialCompletionRate;
+        private double lineCoverageRate;
+        private double regressionRate;
+        private double outsideCodeRate;
+        private double averageLineFixationMs;
     }
 
     // 获取用户的历史注意力数据

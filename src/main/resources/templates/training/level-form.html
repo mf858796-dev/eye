@@ -7,7 +7,15 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link rel="stylesheet" th:href="@{/css/app.css}">
-    <style>textarea.code-editor{min-height:320px;font-family:Consolas,"Courier New",monospace;font-size:14px;}</style>
+    <style>
+        textarea.code-editor{min-height:320px;font-family:Consolas,"Courier New",monospace;font-size:14px;}
+        .line-picker{max-height:260px;overflow:auto;border:1px solid var(--app-line,#dee2e6);border-radius:8px;background:#111827;color:#d1d5db;font-family:Consolas,"Courier New",monospace;font-size:13px;}
+        .line-picker-row{display:grid;grid-template-columns:56px minmax(0,1fr);align-items:start;border-bottom:1px solid rgba(255,255,255,.06);}
+        .line-picker-row:last-child{border-bottom:0;}
+        .line-picker-number{border:0;border-right:1px solid rgba(255,255,255,.08);background:#1f2937;color:#9ca3af;padding:6px 8px;text-align:right;cursor:pointer;}
+        .line-picker-number.active{background:#f59e0b;color:#111827;font-weight:700;}
+        .line-picker-code{white-space:pre;overflow:auto;padding:6px 10px;}
+    </style>
 </head>
 <body>
 <main class="page-shell">
@@ -25,12 +33,101 @@
             <div class="col-md-4"><label for="taskType" class="form-label">训练类型</label><select class="form-select" id="taskType" th:field="*{taskType}"><option value="highlight_follow">高亮代码追随</option><option value="logic_trace">逻辑主线跟随</option><option value="bug_hunt">找 Bug 视线追踪</option></select></div>
             <div class="col-12"><label for="targetLines" class="form-label">目标行范围</label><input type="text" class="form-control" id="targetLines" th:field="*{targetLines}" placeholder="例如：3-5,8"><div class="form-text">用于高亮目标代码行，并计算目标命中率与完成度。</div></div>
             <div class="col-12"><label for="guidance" class="form-label">训练指导语</label><textarea class="form-control" id="guidance" rows="3" th:field="*{guidance}"></textarea></div>
-            <div class="col-12"><label for="codeContent" class="form-label">代码内容</label><textarea class="form-control code-editor" id="codeContent" th:field="*{codeContent}" required></textarea></div>
+            <div class="col-12">
+                <label for="codeContent" class="form-label">代码内容</label>
+                <textarea class="form-control code-editor" id="codeContent" th:field="*{codeContent}" required></textarea>
+                <div class="form-text">点击下方行号可选择目标行，系统会自动写入目标行范围。</div>
+                <div id="linePicker" class="line-picker mt-2" aria-label="目标行点选区"></div>
+            </div>
             <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" id="active" th:field="*{active}"><label class="form-check-label" for="active">启用该关卡</label></div></div>
         </div>
         <div class="toolbar justify-content-start mt-4"><button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> 保存关卡</button><a th:href="@{/training/levels}" class="btn btn-outline-secondary">取消</a></div>
     </form>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const codeInput = document.getElementById('codeContent');
+    const targetInput = document.getElementById('targetLines');
+    const linePicker = document.getElementById('linePicker');
+    const selectedLines = new Set();
+
+    function parseLineRange(value) {
+        selectedLines.clear();
+        if (!value) {
+            return;
+        }
+        value.split(',').map(item => item.trim()).filter(Boolean).forEach(item => {
+            if (item.includes('-')) {
+                const [startRaw, endRaw] = item.split('-', 2);
+                const start = parseInt(startRaw, 10);
+                const end = parseInt(endRaw, 10);
+                if (!Number.isNaN(start) && !Number.isNaN(end)) {
+                    for (let line = Math.min(start, end); line <= Math.max(start, end); line++) {
+                        selectedLines.add(line);
+                    }
+                }
+                return;
+            }
+            const line = parseInt(item, 10);
+            if (!Number.isNaN(line)) {
+                selectedLines.add(line);
+            }
+        });
+    }
+
+    function compressLineRange() {
+        const lines = Array.from(selectedLines).sort((a, b) => a - b);
+        const parts = [];
+        for (let i = 0; i < lines.length; i++) {
+            const start = lines[i];
+            let end = start;
+            while (i + 1 < lines.length && lines[i + 1] === end + 1) {
+                end = lines[++i];
+            }
+            parts.push(start === end ? String(start) : `${start}-${end}`);
+        }
+        targetInput.value = parts.join(',');
+    }
+
+    function renderLinePicker() {
+        const lines = (codeInput.value || '').split('\n');
+        linePicker.innerHTML = '';
+        lines.forEach((line, index) => {
+            const lineNumber = index + 1;
+            const row = document.createElement('div');
+            row.className = 'line-picker-row';
+
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'line-picker-number' + (selectedLines.has(lineNumber) ? ' active' : '');
+            button.textContent = lineNumber;
+            button.addEventListener('click', () => {
+                if (selectedLines.has(lineNumber)) {
+                    selectedLines.delete(lineNumber);
+                } else {
+                    selectedLines.add(lineNumber);
+                }
+                compressLineRange();
+                renderLinePicker();
+            });
+
+            const code = document.createElement('div');
+            code.className = 'line-picker-code';
+            code.textContent = line || ' ';
+
+            row.appendChild(button);
+            row.appendChild(code);
+            linePicker.appendChild(row);
+        });
+    }
+
+    parseLineRange(targetInput.value);
+    renderLinePicker();
+    codeInput.addEventListener('input', renderLinePicker);
+    targetInput.addEventListener('input', () => {
+        parseLineRange(targetInput.value);
+        renderLinePicker();
+    });
+</script>
 </body>
 </html>

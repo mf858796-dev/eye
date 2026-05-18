@@ -9,7 +9,7 @@
     <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
-<div class="app-layout">
+<div class="app-layout dashboard-layout">
     <aside class="app-sidebar">
         <div class="brand">
             <h1 class="brand-title">眼动仪训练系统</h1>
@@ -30,14 +30,14 @@
         </nav>
     </aside>
 
-    <main class="app-main">
-        <section class="panel dashboard-hero">
+    <main class="app-main dashboard-main">
+        <section class="dashboard-topbar" aria-label="仪表盘摘要">
             <div>
-                <p class="section-label">系统总览</p>
+                <p class="section-label">训练控制台</p>
                 <h2 class="page-title">你好，<span th:text="${displayName}">用户</span></h2>
-                <p class="page-copy">这里汇总设备状态、训练进度、下一关和最近报告。</p>
+                <p class="page-copy">集中查看设备状态、训练进度、推荐关卡和最近报告，快速进入下一次代码阅读训练。</p>
             </div>
-            <div class="toolbar">
+            <div class="toolbar dashboard-actions">
                 <a th:if="${activeSessionResumable}" th:href="@{/training/resume/{id}(id=${activeSession.id})}" class="btn btn-primary">
                     <i class="bi bi-play-fill"></i> 继续训练
                 </a>
@@ -53,71 +53,84 @@
             </div>
         </section>
 
-        <section class="action-strip mb-3">
-            <div th:if="${activeSessionResumable}" class="action-card primary">
-                <i class="bi bi-lightning-charge"></i>
-                <div>
-                    <p class="flow-title">有一场训练正在进行</p>
-                    <p class="flow-copy" th:text="${activeSession.sessionName}">代码阅读训练</p>
+        <section class="dashboard-focus">
+            <article class="focus-card">
+                <div class="focus-content">
+                    <span class="focus-icon"><i class="bi bi-lightning-charge"></i></span>
+                    <div>
+                        <p class="section-label">下一步</p>
+                        <h3 th:if="${activeSessionResumable}" th:text="${activeSession.sessionName}">继续未完成训练</h3>
+                        <h3 th:if="${!activeSessionResumable && nextCodeExample != null}" th:text="${nextCodeExample.title}">推荐训练关卡</h3>
+                        <h3 th:if="${!activeSessionResumable && nextCodeExample == null}">暂无推荐关卡</h3>
+                        <p th:if="${activeSessionResumable}">检测到一场进行中的训练，可直接回到上次代码阅读位置。</p>
+                        <p th:if="${!activeSessionResumable && nextCodeExample != null}" th:text="${nextCodeExample.description}">选择推荐关卡开始训练。</p>
+                        <p th:if="${!activeSessionResumable && nextCodeExample == null}">题库还没有可用关卡，可以先进入题库管理新增训练内容。</p>
+                    </div>
                 </div>
-                <a th:href="@{/training/resume/{id}(id=${activeSession.id})}" class="btn btn-sm btn-primary">继续</a>
-            </div>
-            <div th:if="${!activeSessionResumable && !tobiiConnected}" class="action-card">
-                <i class="bi bi-usb-symbol"></i>
-                <div>
-                    <p class="flow-title">先连接眼动仪</p>
-                    <p class="flow-copy">连接成功后会显示校准与校准历史入口。</p>
+                <div class="focus-actions">
+                    <a th:if="${activeSessionResumable}" th:href="@{/training/resume/{id}(id=${activeSession.id})}" class="btn btn-primary">继续</a>
+                    <a th:if="${!activeSessionResumable && nextCodeExample != null}" th:href="@{/training/start/code/{id}(id=${nextCodeExample.id})}" class="btn btn-primary">开始这一关</a>
+                    <a th:if="${!activeSessionResumable && nextCodeExample == null}" th:href="@{/training/levels}" class="btn btn-primary">管理题库</a>
                 </div>
-                <a th:href="@{/tobii/test}" class="btn btn-sm btn-outline-primary">去连接</a>
-            </div>
-            <div th:if="${!activeSessionResumable && tobiiConnected && nextCodeExample != null}" class="action-card">
-                <i class="bi bi-journal-code"></i>
-                <div>
-                    <p class="flow-title">推荐下一关</p>
-                    <p class="flow-copy" th:text="${nextCodeExample.title}">训练关卡</p>
-                </div>
-                <a th:href="@{/training/start/code/{id}(id=${nextCodeExample.id})}" class="btn btn-sm btn-primary">开始</a>
-            </div>
-        </section>
+            </article>
 
-        <section class="metric-grid mb-3">
-            <div class="metric-card">
-                <p class="metric-label">累计训练</p>
-                <p class="metric-value"><span th:text="${totalSessions}">0</span><span class="metric-unit">次</span></p>
-            </div>
-            <div class="metric-card">
-                <p class="metric-label">完成率</p>
-                <p class="metric-value"><span th:text="${completionRate}">0</span><span class="metric-unit">%</span></p>
-            </div>
-            <div class="metric-card">
-                <p class="metric-label">平均注意力</p>
-                <p class="metric-value"><span th:text="${averageAttentionScore}">0</span><span class="metric-unit">分</span></p>
-            </div>
-            <div class="metric-card">
-                <p class="metric-label">训练时长</p>
-                <p class="metric-value"><span th:text="${totalDurationHours}">0.0</span><span class="metric-unit">小时</span></p>
-            </div>
-        </section>
-
-        <div class="dashboard-grid mb-3">
-            <section class="panel status-card">
+            <article class="device-card">
                 <div>
-                    <p class="section-label">眼动仪状态</p>
+                    <p class="section-label">设备状态</p>
                     <span th:if="${tobiiConnected}" class="status-pill connected"><i class="bi bi-check-circle-fill"></i>已连接</span>
                     <span th:unless="${tobiiConnected}" class="status-pill disconnected"><i class="bi bi-exclamation-circle-fill"></i>未连接</span>
-                    <p class="muted-copy mt-2 mb-0" th:if="${tobiiConnected}">可以校准、采集 gaze3d 数据并开始训练。</p>
-                    <p class="muted-copy mt-2 mb-0" th:unless="${tobiiConnected}">可以先使用模拟数据体验训练；连接设备后会进入真实采集流程。</p>
                 </div>
-                <div class="d-flex flex-column gap-2">
+                <p class="muted-copy" th:if="${tobiiConnected}">可以进行校准、采集 gaze3d 数据，并生成真实训练报告。</p>
+                <p class="muted-copy" th:unless="${tobiiConnected}">可先使用模拟数据体验流程；连接设备后会开放校准和真实采集入口。</p>
+                <div class="toolbar justify-content-start mt-auto">
                     <a th:href="@{/tobii/test}" class="btn btn-sm btn-outline-primary">连接页</a>
                     <a th:if="${tobiiConnected}" th:href="@{/tobii/calibration}" class="btn btn-sm btn-primary">校准</a>
                 </div>
-            </section>
+            </article>
+        </section>
 
-            <section class="panel">
+        <section class="metric-grid dashboard-metrics" aria-label="训练指标">
+            <article class="metric-card metric-accent">
+                <i class="bi bi-activity"></i>
+                <p class="metric-label">累计训练</p>
+                <p class="metric-value"><span th:text="${totalSessions}">0</span><span class="metric-unit">次</span></p>
+            </article>
+            <article class="metric-card metric-accent">
+                <i class="bi bi-check2-circle"></i>
+                <p class="metric-label">完成率</p>
+                <p class="metric-value"><span th:text="${completionRate}">0</span><span class="metric-unit">%</span></p>
+            </article>
+            <article class="metric-card metric-accent">
+                <i class="bi bi-eye"></i>
+                <p class="metric-label">平均注意力</p>
+                <p class="metric-value"><span th:text="${averageAttentionScore}">0</span><span class="metric-unit">分</span></p>
+            </article>
+            <article class="metric-card metric-accent">
+                <i class="bi bi-hourglass-split"></i>
+                <p class="metric-label">训练时长</p>
+                <p class="metric-value"><span th:text="${totalDurationHours}">0.0</span><span class="metric-unit">小时</span></p>
+            </article>
+        </section>
+
+        <section class="dashboard-grid dashboard-insights">
+            <article class="panel progress-panel">
+                <div class="d-flex align-items-start justify-content-between gap-3">
+                    <div>
+                        <p class="section-label">训练进度</p>
+                        <h3 class="panel-title">本阶段完成情况</h3>
+                    </div>
+                    <span class="soft-badge" th:text="${completedSessions} + '/' + ${totalSessions} + ' 已完成'">0/0 已完成</span>
+                </div>
+                <div class="progress-track" aria-hidden="true">
+                    <div class="progress-fill" th:style="'width:' + ${completionRate} + '%'"></div>
+                </div>
+                <p class="muted-copy mb-0">完成率会随着训练报告生成自动更新，可用于观察代码阅读专注训练的持续性。</p>
+            </article>
+
+            <article class="panel">
                 <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
                     <div>
-                        <p class="section-label">训练题库</p>
+                        <p class="section-label">推荐关卡</p>
                         <h3 class="panel-title" th:text="${nextCodeExample != null ? nextCodeExample.title : '暂无可用关卡'}">训练关卡</h3>
                     </div>
                     <span class="soft-badge" th:text="'共 ' + ${levelCount} + ' 关'">共 0 关</span>
@@ -134,10 +147,11 @@
                     </a>
                     <a th:href="@{/training/code-examples}" class="btn btn-outline-primary">查看全部关卡</a>
                 </div>
-            </section>
+            </article>
 
-            <section class="panel">
+            <article class="panel">
                 <p class="section-label">训练资产</p>
+                <h3 class="panel-title">成果与记录</h3>
                 <div class="mini-stat-grid">
                     <div>
                         <strong th:text="${completedSessions}">0</strong>
@@ -152,10 +166,10 @@
                     <a th:href="@{/achievements}" class="btn btn-sm btn-outline-primary">查看成就</a>
                     <a th:href="@{/training/list}" class="btn btn-sm btn-outline-primary">训练记录</a>
                 </div>
-            </section>
-        </div>
+            </article>
+        </section>
 
-        <section class="panel">
+        <section class="panel recent-panel">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                 <div>
                     <p class="section-label">最近训练</p>
@@ -166,7 +180,7 @@
             </div>
             <div th:if="${#lists.isEmpty(recentSessions)}" class="empty-state">还没有训练记录，可以从题库选择一个关卡开始。</div>
             <div th:unless="${#lists.isEmpty(recentSessions)}" class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover dashboard-table">
                     <thead>
                     <tr><th>会话名称</th><th>开始时间</th><th>时长</th><th>完成度</th><th>状态</th><th>操作</th></tr>
                     </thead>
