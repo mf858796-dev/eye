@@ -18,7 +18,7 @@
 - Spring Boot 2.7.15
 - Spring MVC / Spring Security / Spring Data JPA
 - Thymeleaf / Bootstrap 5
-- H2 开发数据库 / MySQL 生产数据库
+-  MySQL 生产数据库
 - Maven / JUnit 5
 
 ## 快速启动
